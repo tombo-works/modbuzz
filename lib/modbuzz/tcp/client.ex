@@ -195,7 +195,17 @@ defmodule Modbuzz.TCP.Client do
     transactions =
       Enum.reduce(pdus(binary), transactions, fn {transaction_id, pdu}, acc ->
         {transaction, acc} = Map.pop(acc, transaction_id)
-        send(transaction.from_pid, PDU.decode(transaction.request, pdu))
+
+        send(
+          transaction.from_pid,
+          {
+            :modbuzz,
+            transaction.unit_id,
+            transaction.request,
+            PDU.decode(transaction.request, pdu)
+          }
+        )
+
         acc
       end)
 

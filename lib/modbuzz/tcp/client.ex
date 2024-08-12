@@ -43,23 +43,20 @@ defmodule Modbuzz.TCP.Client do
   def handle_continue(:connect, state) do
     case gen_tcp_connect(state) do
       {:ok, socket} ->
-        Logger.info("#{__MODULE__}: :gen_tcp connected.")
+        Logger.debug("#{__MODULE__}: :connect succeeded.")
         {:noreply, %{state | socket: socket}}
 
       {:error, reason} ->
-        Logger.error("#{__MODULE__}: :gen_tcp can't connect, the reason is #{inspect(reason)}.")
+        Logger.error("#{__MODULE__}: :connect failed, the reason is #{inspect(reason)}.")
         {:noreply, state, {:continue, :connect}}
     end
   end
 
-  def handle_continue({:recall, from, unit_id, request, timeout}, state) do
+  def handle_continue({:recall, unit_id, request, timeout, from}, state) do
     %{socket: socket, transaction_id: transaction_id} = state
 
-    transaction_id = if transaction_id == 0xFF, do: 0, else: transaction_id + 1
-    pdu = PDU.encode(request)
-    mbap_header = mbap_header(transaction_id, byte_size(pdu) + @unit_id_byte_size, unit_id)
-    adu = <<mbap_header::binary, pdu::binary>>
-
+    transaction_id = increment_transaction_id(transaction_id)
+    adu = adu(unit_id, request, transaction_id)
     state = %{state | transaction_id: transaction_id}
 
     with :ok = :gen_tcp.close(socket),
@@ -72,17 +69,17 @@ defmodule Modbuzz.TCP.Client do
       {:noreply, %{state | socket: socket}}
     else
       {:connect, {:error, reason} = error} ->
-        Logger.error("#{__MODULE__}: recall connect failed, the reason is #{inspect(reason)}.")
+        Logger.error("#{__MODULE__}: :recall connect failed, the reason is #{inspect(reason)}.")
         GenServer.reply(from, error)
         {:noreply, %{state | socket: nil}, {:continue, :connect}}
 
       {:send, {:error, reason} = error} ->
-        Logger.error("#{__MODULE__}: recall send failed, the reason is #{inspect(reason)}.")
+        Logger.error("#{__MODULE__}: :recall send failed, the reason is #{inspect(reason)}.")
         GenServer.reply(from, error)
         {:noreply, %{state | socket: socket}}
 
       {:recv, {:error, reason} = error} ->
-        Logger.error("#{__MODULE__}: recall recv failed, the reason is #{inspect(reason)}.")
+        Logger.error("#{__MODULE__}: :recall recv failed, the reason is #{inspect(reason)}.")
         GenServer.reply(from, error)
         {:noreply, %{state | socket: socket}}
 
@@ -103,15 +100,34 @@ defmodule Modbuzz.TCP.Client do
     end
   end
 
+  def handle_continue({:recast, unit_id, request, from_pid}, state) do
+    %{socket: socket, transaction_id: transaction_id} = state
+
+    transaction_id = increment_transaction_id(transaction_id)
+    adu = adu(unit_id, request, transaction_id)
+    state = %{state | transaction_id: transaction_id}
+
+    with :ok <- :gen_tcp.close(socket),
+         {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
+         {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)} do
+      {:noreply, %{state | socket: socket, from_pid: from_pid}}
+    else
+      {:connect, {:error, reason}} ->
+        Logger.error("#{__MODULE__}: :recast connect failed, the reason is #{inspect(reason)}.")
+        {:noreply, %{state | socket: nil, from_pid: nil}, {:continue, :connect}}
+
+      {:send, {:error, reason}} ->
+        Logger.error("#{__MODULE__}: :recast send failed, the reason is #{inspect(reason)}.")
+        {:noreply, %{state | socket: socket, from_pid: nil}}
+    end
+  end
+
   @impl true
   def handle_call({:call, unit_id, request, timeout}, from, %{active: false} = state) do
     %{socket: socket, transaction_id: transaction_id} = state
 
-    transaction_id = if transaction_id == 0xFF, do: 0, else: transaction_id + 1
-    pdu = PDU.encode(request)
-    mbap_header = mbap_header(transaction_id, byte_size(pdu) + @unit_id_byte_size, unit_id)
-    adu = <<mbap_header::binary, pdu::binary>>
-
+    transaction_id = increment_transaction_id(transaction_id)
+    adu = adu(unit_id, request, transaction_id)
     state = %{state | transaction_id: transaction_id}
 
     with {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)},
@@ -122,17 +138,17 @@ defmodule Modbuzz.TCP.Client do
     else
       {:send, {:error, reason}} ->
         Logger.warning(
-          "#{__MODULE__}: call send failed, the reason is #{inspect(reason)}, recall."
+          "#{__MODULE__}: :call send failed, the reason is #{inspect(reason)}, :recall."
         )
 
-        {:noreply, state, {:continue, {:recall, from, unit_id, request, timeout}}}
+        {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
 
       {:recv, {:error, reason}} ->
         Logger.warning(
-          "#{__MODULE__}: call recv failed, the reason is #{inspect(reason)}, recall."
+          "#{__MODULE__}: :call recv failed, the reason is #{inspect(reason)}, :recall."
         )
 
-        {:noreply, state, {:continue, {:recall, from, unit_id, request, timeout}}}
+        {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
 
       <<received_transaction_id::16, _rest::binary>> = binary when is_binary(binary) ->
         Logger.error(
@@ -158,32 +174,20 @@ defmodule Modbuzz.TCP.Client do
   def handle_cast({:cast, unit_id, request, from_pid}, %{active: true} = state) do
     %{socket: socket, transaction_id: transaction_id} = state
 
-    transaction_id = if transaction_id == 0xFF, do: 0, else: transaction_id + 1
-    pdu = PDU.encode(request)
-    mbap_header = mbap_header(transaction_id, byte_size(pdu) + @unit_id_byte_size, unit_id)
-    adu = <<mbap_header::binary, pdu::binary>>
+    transaction_id = increment_transaction_id(transaction_id)
+    adu = adu(unit_id, request, transaction_id)
+    state = %{state | transaction_id: transaction_id}
 
     case :gen_tcp.send(socket, adu) do
       :ok ->
-        {:noreply, %{state | from_pid: from_pid, transaction_id: transaction_id}}
+        {:noreply, %{state | from_pid: from_pid}}
 
       {:error, reason} ->
-        Logger.debug("#{__MODULE__}: 1st send failed, the reason is #{inspect(reason)}.")
+        Logger.warning(
+          "#{__MODULE__}: :cast send failed, the reason is #{inspect(reason)}, :recast."
+        )
 
-        with :ok <- :gen_tcp.close(socket),
-             {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
-             {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)} do
-          {:noreply,
-           %{state | socket: socket, from_pid: from_pid, transaction_id: transaction_id}}
-        else
-          {:connect, {:error, reason}} ->
-            Logger.error("#{__MODULE__}: connect failed, the reason is #{inspect(reason)}.")
-            {:noreply, %{state | socket: nil}, {:continue, :connect}}
-
-          {:send, {:error, reason}} ->
-            Logger.error("#{__MODULE__}: 2nd send failed, the reason is #{inspect(reason)}.")
-            {:noreply, %{state | socket: socket}}
-        end
+        {:noreply, %{state | from_pid: nil}, {:continue, {:recast, unit_id, request, from_pid}}}
     end
   end
 
@@ -215,6 +219,12 @@ defmodule Modbuzz.TCP.Client do
     {:noreply, %{state | socket: nil}, {:continue, :connect}}
   end
 
+  def adu(unit_id, request, transaction_id) do
+    pdu = PDU.encode(request)
+    mbap_header = mbap_header(transaction_id, byte_size(pdu) + @unit_id_byte_size, unit_id)
+    <<mbap_header::binary, pdu::binary>>
+  end
+
   def mbap_header(transaction_id, length, unit_id) do
     protocol_id = 0
     <<transaction_id::16, protocol_id::16, length::16, unit_id::8>>
@@ -237,5 +247,9 @@ defmodule Modbuzz.TCP.Client do
       [mode: :binary, packet: :raw, keepalive: true, active: active],
       _timeout = 3000
     )
+  end
+
+  defp increment_transaction_id(transaction_id) do
+    if transaction_id == 0xFFFF, do: 0, else: transaction_id + 1
   end
 end

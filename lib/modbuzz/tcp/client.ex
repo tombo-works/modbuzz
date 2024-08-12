@@ -40,7 +40,7 @@ defmodule Modbuzz.TCP.Client do
   end
 
   @impl true
-  def handle_continue(:connect, state) do
+  def handle_continue(:connect, %{socket: nil} = state) do
     case gen_tcp_connect(state) do
       {:ok, socket} ->
         Logger.debug("#{__MODULE__}: :connect succeeded.")
@@ -52,26 +52,24 @@ defmodule Modbuzz.TCP.Client do
     end
   end
 
-  def handle_continue({:recall, unit_id, request, timeout, from}, state) do
+  def handle_continue({:recall, unit_id, request, timeout, from}, %{socket: nil} = state) do
     %{socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = increment_transaction_id(transaction_id)
     adu = adu(unit_id, request, transaction_id)
     state = %{state | transaction_id: transaction_id}
 
-    with :ok = :gen_tcp.close(socket),
-         {:connect, {:ok, socket}} = {:connect, gen_tcp_connect(state)},
+    with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
          {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)},
-         {:recv, {:ok, binary}} <- {:recv, :gen_tcp.recv(socket, _length = 0, timeout)},
-         <<^transaction_id::16, _rest::binary>> <- binary do
-      [decoded_pdu] = for {_transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
+         {:recv, {:ok, binary}} <- {:recv, :gen_tcp.recv(socket, _length = 0, timeout)} do
+      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
       GenServer.reply(from, decoded_pdu)
       {:noreply, %{state | socket: socket}}
     else
       {:connect, {:error, reason} = error} ->
         Logger.error("#{__MODULE__}: :recall connect failed, the reason is #{inspect(reason)}.")
         GenServer.reply(from, error)
-        {:noreply, %{state | socket: nil}, {:continue, :connect}}
+        {:noreply, state, {:continue, :connect}}
 
       {:send, {:error, reason} = error} ->
         Logger.error("#{__MODULE__}: :recall send failed, the reason is #{inspect(reason)}.")
@@ -82,40 +80,24 @@ defmodule Modbuzz.TCP.Client do
         Logger.error("#{__MODULE__}: :recall recv failed, the reason is #{inspect(reason)}.")
         GenServer.reply(from, error)
         {:noreply, %{state | socket: socket}}
-
-      <<received_transaction_id::16, _rest::binary>> = binary when is_binary(binary) ->
-        Logger.error(
-          """
-          #{__MODULE__}: transaction id is not matched.
-          the request is #{inspect(request)}.
-          the received binary is #{inspect(binary)}.
-          the expected transaction id is #{inspect(transaction_id)}.
-          the received transaction id is #{inspect(received_transaction_id)}.
-          """
-          |> String.trim_trailing()
-        )
-
-        GenServer.reply(from, {:error, :transaction_id_mismatch})
-        {:noreply, %{state | socket: socket}}
     end
   end
 
-  def handle_continue({:recast, unit_id, request, from_pid}, state) do
+  def handle_continue({:recast, unit_id, request, from_pid}, %{socket: nil} = state) do
     %{socket: socket, transaction_id: transaction_id, transactions: transactions} = state
 
     transaction_id = increment_transaction_id(transaction_id)
     adu = adu(unit_id, request, transaction_id)
     state = %{state | transaction_id: transaction_id}
 
-    with :ok <- :gen_tcp.close(socket),
-         {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
+    with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
          {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)} do
       transactions = Map.put(transactions, transaction_id, {unit_id, request, from_pid})
       {:noreply, %{state | socket: socket, transactions: transactions}}
     else
       {:connect, {:error, reason}} ->
         Logger.error("#{__MODULE__}: :recast connect failed, the reason is #{inspect(reason)}.")
-        {:noreply, %{state | socket: nil}, {:continue, :connect}}
+        {:noreply, state, {:continue, :connect}}
 
       {:send, {:error, reason}} ->
         Logger.error("#{__MODULE__}: :recast send failed, the reason is #{inspect(reason)}.")
@@ -132,9 +114,8 @@ defmodule Modbuzz.TCP.Client do
     state = %{state | transaction_id: transaction_id}
 
     with {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)},
-         {:recv, {:ok, binary}} <- {:recv, :gen_tcp.recv(socket, _length = 0, timeout)},
-         <<^transaction_id::16, _rest::binary>> <- binary do
-      [decoded_pdu] = for {_transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
+         {:recv, {:ok, binary}} <- {:recv, :gen_tcp.recv(socket, _length = 0, timeout)} do
+      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
       {:reply, decoded_pdu, state}
     else
       {:send, {:error, reason}} ->
@@ -142,6 +123,8 @@ defmodule Modbuzz.TCP.Client do
           "#{__MODULE__}: :call send failed, the reason is #{inspect(reason)}, :recall."
         )
 
+        :ok = :gen_tcp.close(socket)
+        state = %{state | socket: nil}
         {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
 
       {:recv, {:error, reason}} ->
@@ -149,21 +132,9 @@ defmodule Modbuzz.TCP.Client do
           "#{__MODULE__}: :call recv failed, the reason is #{inspect(reason)}, :recall."
         )
 
+        :ok = :gen_tcp.close(socket)
+        state = %{state | socket: nil}
         {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
-
-      <<received_transaction_id::16, _rest::binary>> = binary when is_binary(binary) ->
-        Logger.error(
-          """
-          #{__MODULE__}: transaction id is not matched.
-          the request is #{inspect(request)}.
-          the received binary is #{inspect(binary)}.
-          the expected transaction id is #{inspect(transaction_id)}.
-          the received transaction id is #{inspect(received_transaction_id)}.
-          """
-          |> String.trim_trailing()
-        )
-
-        {:reply, {:error, :transaction_id_mismatch}, state}
     end
   end
 
@@ -189,6 +160,8 @@ defmodule Modbuzz.TCP.Client do
           "#{__MODULE__}: :cast send failed, the reason is #{inspect(reason)}, :recast."
         )
 
+        :ok = :gen_tcp.close(socket)
+        state = %{state | socket: nil}
         {:noreply, state, {:continue, {:recast, unit_id, request, from_pid}}}
     end
   end
@@ -211,13 +184,13 @@ defmodule Modbuzz.TCP.Client do
     {:noreply, %{state | transactions: transactions}}
   end
 
-  def handle_info({:tcp_closed, socket}, %{socket: socket} = state) do
+  def handle_info({:tcp_closed, socket}, %{socket: socket, active: true} = state) do
     Logger.warning("#{__MODULE__}: :gen_tcp closed.")
     :ok = :gen_tcp.close(socket)
     {:noreply, %{state | socket: nil}, {:continue, :connect}}
   end
 
-  def handle_info({:tcp_error, socket, reason}, %{socket: socket} = state) do
+  def handle_info({:tcp_error, socket, reason}, %{socket: socket, active: true} = state) do
     Logger.error("#{__MODULE__}: :gen_tcp error, the reason is #{inspect(reason)}.")
     :ok = :gen_tcp.close(socket)
     {:noreply, %{state | socket: nil}, {:continue, :connect}}

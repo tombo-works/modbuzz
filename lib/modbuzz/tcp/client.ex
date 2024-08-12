@@ -13,11 +13,11 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def call(name, unit_id \\ 0, request, timeout \\ 5000)
-      when unit_id in 0x00..0xFF and is_tuple(request) and is_integer(timeout) do
+      when unit_id in 0x00..0xFF and is_struct(request) and is_integer(timeout) do
     GenServer.call(name, {:call, unit_id, request, timeout})
   end
 
-  def cast(name, unit_id \\ 0, request) when unit_id in 0x00..0xFF and is_tuple(request) do
+  def cast(name, unit_id \\ 0, request) when unit_id in 0x00..0xFF and is_struct(request) do
     GenServer.cast(name, {:cast, unit_id, request, self()})
   end
 
@@ -32,8 +32,8 @@ defmodule Modbuzz.TCP.Client do
       port: port,
       active: active,
       socket: nil,
-      from_pid: nil,
-      transaction_id: 0
+      transaction_id: 0,
+      transactions: %{}
     }
 
     {:ok, state, {:continue, :connect}}
@@ -64,7 +64,7 @@ defmodule Modbuzz.TCP.Client do
          {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, :gen_tcp.recv(socket, _length = 0, timeout)},
          <<^transaction_id::16, _rest::binary>> <- binary do
-      [decoded_pdu] = for(pdu <- pdus(binary), do: PDU.decode(pdu))
+      [decoded_pdu] = for {_transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
       GenServer.reply(from, decoded_pdu)
       {:noreply, %{state | socket: socket}}
     else
@@ -101,7 +101,7 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def handle_continue({:recast, unit_id, request, from_pid}, state) do
-    %{socket: socket, transaction_id: transaction_id} = state
+    %{socket: socket, transaction_id: transaction_id, transactions: transactions} = state
 
     transaction_id = increment_transaction_id(transaction_id)
     adu = adu(unit_id, request, transaction_id)
@@ -110,15 +110,16 @@ defmodule Modbuzz.TCP.Client do
     with :ok <- :gen_tcp.close(socket),
          {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
          {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)} do
-      {:noreply, %{state | socket: socket, from_pid: from_pid}}
+      transactions = Map.put(transactions, transaction_id, {unit_id, request, from_pid})
+      {:noreply, %{state | socket: socket, transactions: transactions}}
     else
       {:connect, {:error, reason}} ->
         Logger.error("#{__MODULE__}: :recast connect failed, the reason is #{inspect(reason)}.")
-        {:noreply, %{state | socket: nil, from_pid: nil}, {:continue, :connect}}
+        {:noreply, %{state | socket: nil}, {:continue, :connect}}
 
       {:send, {:error, reason}} ->
         Logger.error("#{__MODULE__}: :recast send failed, the reason is #{inspect(reason)}.")
-        {:noreply, %{state | socket: socket, from_pid: nil}}
+        {:noreply, %{state | socket: socket}}
     end
   end
 
@@ -133,7 +134,7 @@ defmodule Modbuzz.TCP.Client do
     with {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, :gen_tcp.recv(socket, _length = 0, timeout)},
          <<^transaction_id::16, _rest::binary>> <- binary do
-      [decoded_pdu] = for(pdu <- pdus(binary), do: PDU.decode(pdu))
+      [decoded_pdu] = for {_transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
       {:reply, decoded_pdu, state}
     else
       {:send, {:error, reason}} ->
@@ -172,7 +173,7 @@ defmodule Modbuzz.TCP.Client do
 
   @impl true
   def handle_cast({:cast, unit_id, request, from_pid}, %{active: true} = state) do
-    %{socket: socket, transaction_id: transaction_id} = state
+    %{socket: socket, transaction_id: transaction_id, transactions: transactions} = state
 
     transaction_id = increment_transaction_id(transaction_id)
     adu = adu(unit_id, request, transaction_id)
@@ -180,14 +181,15 @@ defmodule Modbuzz.TCP.Client do
 
     case :gen_tcp.send(socket, adu) do
       :ok ->
-        {:noreply, %{state | from_pid: from_pid}}
+        transactions = Map.put(transactions, transaction_id, {unit_id, request, from_pid})
+        {:noreply, %{state | transactions: transactions}}
 
       {:error, reason} ->
         Logger.warning(
           "#{__MODULE__}: :cast send failed, the reason is #{inspect(reason)}, :recast."
         )
 
-        {:noreply, %{state | from_pid: nil}, {:continue, {:recast, unit_id, request, from_pid}}}
+        {:noreply, state, {:continue, {:recast, unit_id, request, from_pid}}}
     end
   end
 
@@ -196,15 +198,17 @@ defmodule Modbuzz.TCP.Client do
   end
 
   @impl true
-  def handle_info(
-        {:tcp, socket, <<transaction_id::16, _rest::binary>> = binary},
-        %{socket: socket, transaction_id: transaction_id} = state
-      ) do
-    %{from_pid: from_pid} = state
+  def handle_info({:tcp, socket, binary}, %{socket: socket} = state) do
+    %{transactions: transactions} = state
 
-    for pdu <- pdus(binary), do: send(from_pid, PDU.decode(pdu))
+    transactions =
+      Enum.reduce(pdus(binary), transactions, fn {transaction_id, pdu}, acc ->
+        {{_unit_id, request, from_pid}, acc} = Map.pop(acc, transaction_id)
+        send(from_pid, PDU.decode(request, pdu))
+        acc
+      end)
 
-    {:noreply, state}
+    {:noreply, %{state | transactions: transactions}}
   end
 
   def handle_info({:tcp_closed, socket}, %{socket: socket} = state) do
@@ -231,9 +235,10 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def pdus(binary, acc \\ []) when is_binary(binary) do
-    <<_transaction_id::16, _protocol_id::16, length::16, _unit_id::8, rest::binary>> = binary
-    <<pdu::binary-size(length - @unit_id_byte_size), rest::binary>> = rest
-    acc = [pdu | acc]
+    <<transaction_id::16, _protocol_id::16, length::16, _unit_id::8,
+      pdu::binary-size(length - @unit_id_byte_size), rest::binary>> = binary
+
+    acc = [{transaction_id, pdu} | acc]
 
     if rest == <<>>, do: Enum.reverse(acc), else: pdus(rest, acc)
   end

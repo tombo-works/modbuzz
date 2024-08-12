@@ -3,6 +3,10 @@ defmodule Modbuzz.TCP.Client do
 
   require Logger
 
+  defmodule Transaction do
+    defstruct [:unit_id, :request, :from_pid, :sent_time]
+  end
+
   alias Modbuzz.PDU
 
   @unit_id_byte_size 1
@@ -92,7 +96,14 @@ defmodule Modbuzz.TCP.Client do
 
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
          {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)} do
-      transactions = Map.put(transactions, transaction_id, {unit_id, request, from_pid})
+      transaction = %Transaction{
+        unit_id: unit_id,
+        request: request,
+        from_pid: from_pid,
+        sent_time: System.monotonic_time(:millisecond)
+      }
+
+      transactions = Map.put(transactions, transaction_id, transaction)
       {:noreply, %{state | socket: socket, transactions: transactions}}
     else
       {:connect, {:error, reason}} ->
@@ -152,7 +163,14 @@ defmodule Modbuzz.TCP.Client do
 
     case :gen_tcp.send(socket, adu) do
       :ok ->
-        transactions = Map.put(transactions, transaction_id, {unit_id, request, from_pid})
+        transaction = %Transaction{
+          unit_id: unit_id,
+          request: request,
+          from_pid: from_pid,
+          sent_time: System.monotonic_time(:millisecond)
+        }
+
+        transactions = Map.put(transactions, transaction_id, transaction)
         {:noreply, %{state | transactions: transactions}}
 
       {:error, reason} ->
@@ -176,8 +194,8 @@ defmodule Modbuzz.TCP.Client do
 
     transactions =
       Enum.reduce(pdus(binary), transactions, fn {transaction_id, pdu}, acc ->
-        {{_unit_id, request, from_pid}, acc} = Map.pop(acc, transaction_id)
-        send(from_pid, PDU.decode(request, pdu))
+        {transaction, acc} = Map.pop(acc, transaction_id)
+        send(transaction.from_pid, PDU.decode(transaction.request, pdu))
         acc
       end)
 
@@ -185,9 +203,26 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def handle_info({:tcp_closed, socket}, %{socket: socket, active: true} = state) do
+    %{transactions: transactions} = state
+
     Logger.warning("#{__MODULE__}: :gen_tcp closed.")
     :ok = :gen_tcp.close(socket)
-    {:noreply, %{state | socket: nil}, {:continue, :connect}}
+    state = %{state | socket: nil}
+
+    transactions
+    |> Enum.filter(fn {_transaction_id, transaction} ->
+      System.monotonic_time(:millisecond) - transaction.sent_time < 10
+    end)
+    |> case do
+      [] ->
+        {:noreply, state, {:continue, :connect}}
+
+      [{_transaction_id, transaction}] ->
+        Logger.debug("#{__MODULE__}: sent successfully but RST ACK received, :recast.")
+
+        {:noreply, state,
+         {:continue, {:recast, transaction.unit_id, transaction.request, transaction.from_pid}}}
+    end
   end
 
   def handle_info({:tcp_error, socket, reason}, %{socket: socket, active: true} = state) do

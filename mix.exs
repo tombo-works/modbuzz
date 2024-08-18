@@ -8,7 +8,8 @@ defmodule Modbuzz.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      consolidate_protocols: false
+      consolidate_protocols: false,
+      dialyzer: dialyzer()
     ]
   end
 
@@ -23,7 +24,15 @@ defmodule Modbuzz.MixProject do
   defp deps do
     [
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+    ]
+  end
+
+  defp dialyzer() do
+    [
+      plt_local_path: "priv/plts/modbuzz.plt",
+      plt_core_path: "priv/plts/core.plt"
     ]
   end
 end

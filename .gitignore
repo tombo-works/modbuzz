@@ -24,3 +24,7 @@ modbuzz-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Ignore dialyxir files
+/priv/plts/*.plt
+/priv/plts/*.plt.hash

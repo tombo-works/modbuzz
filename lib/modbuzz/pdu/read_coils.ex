@@ -1,4 +1,5 @@
 defmodule Modbuzz.PDU.ReadCoils do
+  @moduledoc false
   defstruct [:starting_address, :quantity_of_coils]
 end
 

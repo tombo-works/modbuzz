@@ -1,9 +1,14 @@
 defmodule Modbuzz.TCP.Client do
+  @moduledoc """
+  TODO: write!!
+  """
+
   use GenServer
 
   require Logger
 
   defmodule Transaction do
+    @moduledoc false
     defstruct [:unit_id, :request, :from_pid, :sent_time]
   end
 

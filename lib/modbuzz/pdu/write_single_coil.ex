@@ -1,4 +1,5 @@
 defmodule Modbuzz.PDU.WriteSingleCoil do
+  @moduledoc false
   defstruct [:output_address, :output_value]
 end
 

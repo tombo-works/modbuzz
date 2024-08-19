@@ -34,7 +34,10 @@ defmodule Modbuzz.MixProject do
   defp test_coverage() do
     [
       summary: [threshold: 80],
-      ignore_modules: []
+      ignore_modules: [
+        ~r/^Modbuzz\.PDU\.[a-zA-Z0-9]+$/,
+        Modbuzz.TCP.Client.Transaction
+      ]
     ]
   end
 

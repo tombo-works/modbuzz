@@ -21,12 +21,13 @@ defmodule Modbuzz.TCP.Client do
     GenServer.start_link(__MODULE__, args, name: name)
   end
 
-  def call(name, unit_id \\ 0, request, timeout \\ 5000)
+  def call(name \\ __MODULE__, unit_id \\ 0, request, timeout \\ 5000)
       when unit_id in 0x00..0xFF and is_struct(request) and is_integer(timeout) do
     GenServer.call(name, {:call, unit_id, request, timeout})
   end
 
-  def cast(name, unit_id \\ 0, request) when unit_id in 0x00..0xFF and is_struct(request) do
+  def cast(name \\ __MODULE__, unit_id \\ 0, request)
+      when unit_id in 0x00..0xFF and is_struct(request) do
     GenServer.cast(name, {:cast, unit_id, request, self()})
   end
 

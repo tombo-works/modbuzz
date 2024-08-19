@@ -32,11 +32,13 @@ defmodule Modbuzz.TCP.Client do
 
   @impl true
   def init(args) when is_list(args) do
+    transport = Keyword.get(args, :transport, :gen_tcp)
     address = Keyword.get(args, :address, {192, 168, 5, 57})
     port = Keyword.get(args, :port, 502)
     active = Keyword.get(args, :active, true)
 
     state = %{
+      transport: transport,
       address: address,
       port: port,
       active: active,
@@ -62,15 +64,15 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def handle_continue({:recall, unit_id, request, timeout, from}, %{socket: nil} = state) do
-    %{socket: socket, transaction_id: transaction_id} = state
+    %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = increment_transaction_id(transaction_id)
     adu = adu(unit_id, request, transaction_id)
     state = %{state | transaction_id: transaction_id}
 
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
-         {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)},
-         {:recv, {:ok, binary}} <- {:recv, :gen_tcp.recv(socket, _length = 0, timeout)} do
+         {:send, :ok} <- {:send, transport.send(socket, adu)},
+         {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
       [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
       GenServer.reply(from, decoded_pdu)
       {:noreply, %{state | socket: socket}}
@@ -93,14 +95,19 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def handle_continue({:recast, unit_id, request, from_pid}, %{socket: nil} = state) do
-    %{socket: socket, transaction_id: transaction_id, transactions: transactions} = state
+    %{
+      transport: transport,
+      socket: socket,
+      transaction_id: transaction_id,
+      transactions: transactions
+    } = state
 
     transaction_id = increment_transaction_id(transaction_id)
     adu = adu(unit_id, request, transaction_id)
     state = %{state | transaction_id: transaction_id}
 
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
-         {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)} do
+         {:send, :ok} <- {:send, transport.send(socket, adu)} do
       transaction = %Transaction{
         unit_id: unit_id,
         request: request,
@@ -123,14 +130,14 @@ defmodule Modbuzz.TCP.Client do
 
   @impl true
   def handle_call({:call, unit_id, request, timeout}, from, %{active: false} = state) do
-    %{socket: socket, transaction_id: transaction_id} = state
+    %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = increment_transaction_id(transaction_id)
     adu = adu(unit_id, request, transaction_id)
     state = %{state | transaction_id: transaction_id}
 
-    with {:send, :ok} <- {:send, :gen_tcp.send(socket, adu)},
-         {:recv, {:ok, binary}} <- {:recv, :gen_tcp.recv(socket, _length = 0, timeout)} do
+    with {:send, :ok} <- {:send, transport.send(socket, adu)},
+         {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
       [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
       {:reply, decoded_pdu, state}
     else
@@ -139,7 +146,7 @@ defmodule Modbuzz.TCP.Client do
           "#{__MODULE__}: :call send failed, the reason is #{inspect(reason)}, :recall."
         )
 
-        :ok = :gen_tcp.close(socket)
+        :ok = transport.close(socket)
         state = %{state | socket: nil}
         {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
 
@@ -148,7 +155,7 @@ defmodule Modbuzz.TCP.Client do
           "#{__MODULE__}: :call recv failed, the reason is #{inspect(reason)}, :recall."
         )
 
-        :ok = :gen_tcp.close(socket)
+        :ok = transport.close(socket)
         state = %{state | socket: nil}
         {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
     end
@@ -160,13 +167,18 @@ defmodule Modbuzz.TCP.Client do
 
   @impl true
   def handle_cast({:cast, unit_id, request, from_pid}, %{active: true} = state) do
-    %{socket: socket, transaction_id: transaction_id, transactions: transactions} = state
+    %{
+      transport: transport,
+      socket: socket,
+      transaction_id: transaction_id,
+      transactions: transactions
+    } = state
 
     transaction_id = increment_transaction_id(transaction_id)
     adu = adu(unit_id, request, transaction_id)
     state = %{state | transaction_id: transaction_id}
 
-    case :gen_tcp.send(socket, adu) do
+    case transport.send(socket, adu) do
       :ok ->
         transaction = %Transaction{
           unit_id: unit_id,
@@ -183,7 +195,7 @@ defmodule Modbuzz.TCP.Client do
           "#{__MODULE__}: :cast send failed, the reason is #{inspect(reason)}, :recast."
         )
 
-        :ok = :gen_tcp.close(socket)
+        :ok = transport.close(socket)
         state = %{state | socket: nil}
         {:noreply, state, {:continue, {:recast, unit_id, request, from_pid}}}
     end
@@ -218,10 +230,10 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def handle_info({:tcp_closed, socket}, %{socket: socket, active: true} = state) do
-    %{transactions: transactions} = state
+    %{transport: transport, transactions: transactions} = state
 
-    Logger.warning("#{__MODULE__}: :gen_tcp closed.")
-    :ok = :gen_tcp.close(socket)
+    Logger.warning("#{__MODULE__}: transport closed.")
+    :ok = transport.close(socket)
     state = %{state | socket: nil}
 
     transactions
@@ -241,8 +253,9 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def handle_info({:tcp_error, socket, reason}, %{socket: socket, active: true} = state) do
-    Logger.error("#{__MODULE__}: :gen_tcp error, the reason is #{inspect(reason)}.")
-    :ok = :gen_tcp.close(socket)
+    %{transport: transport} = state
+    Logger.error("#{__MODULE__}: transport error, the reason is #{inspect(reason)}.")
+    :ok = transport.close(socket)
     {:noreply, %{state | socket: nil}, {:continue, :connect}}
   end
 
@@ -267,9 +280,9 @@ defmodule Modbuzz.TCP.Client do
   end
 
   defp gen_tcp_connect(state) do
-    %{address: address, port: port, active: active} = state
+    %{transport: transport, address: address, port: port, active: active} = state
 
-    :gen_tcp.connect(
+    transport.connect(
       address,
       port,
       [mode: :binary, packet: :raw, keepalive: true, active: active],

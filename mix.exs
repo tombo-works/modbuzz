@@ -26,7 +26,8 @@ defmodule Modbuzz.MixProject do
     [
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:mox, "~> 1.0", only: :test}
     ]
   end
 

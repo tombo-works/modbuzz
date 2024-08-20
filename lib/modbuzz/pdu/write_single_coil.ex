@@ -13,7 +13,7 @@ defimpl Modbuzz.PDU, for: Modbuzz.PDU.WriteSingleCoil do
   end
 
   def decode(_struct, <<@write_single_coil::8, _output_address::16, _output_value::16>>) do
-    :ok
+    {:ok, nil}
   end
 
   def decode(_struct, <<@error_code::8, exception_code::8>>) do

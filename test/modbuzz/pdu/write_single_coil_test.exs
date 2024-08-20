@@ -12,7 +12,7 @@ defmodule Modbuzz.PDU.WriteSingleCoilTest do
   end
 
   test "decode/2", %{request: request} do
-    assert Modbuzz.PDU.decode(request, <<0x05::8, 16::16, 1::16>>) == :ok
+    assert Modbuzz.PDU.decode(request, <<0x05::8, 16::16, 1::16>>) == {:ok, nil}
     assert Modbuzz.PDU.decode(request, <<0x05 + 0x80::8, 1::8>>) == {:error, exception_code: 1}
   end
 end

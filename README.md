@@ -24,3 +24,10 @@ end
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/modbuzz>.
+
+## License
+
+This project is licensed under the Apache-2.0 license.
+
+And this project follows the REUSE compliance.
+For more details, see the [REUSE SOFTWARE](https://reuse.software/).

@@ -7,6 +7,6 @@ defprotocol Modbuzz.PDU do
 
   @doc "Encodes the request into a PDU binary"
   def encode(request)
-  @doc "Decodes the PDU binary into ?"
+  @doc "Decodes the PDU binary into tuple"
   def decode(request, binary)
 end

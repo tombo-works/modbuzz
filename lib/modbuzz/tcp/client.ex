@@ -21,11 +21,30 @@ defmodule Modbuzz.TCP.Client do
     GenServer.start_link(__MODULE__, args, name: name)
   end
 
+  @doc """
+  ## Examples
+
+      iex> Modobuzz.TCP.Client.call(%Modbuzz.PDU.WriteSingleCoil{output_address: 0 , output_value: true})
+      {:ok, nil}
+      iex> Modobuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{starting_address: 0 , quantity_of_coils: 1})
+      {:ok, [true]}
+  """
+  @spec call(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t(), timeout()) ::
+          {:ok, decoded_response :: term()} | {:error, reason :: term()}
   def call(name \\ __MODULE__, unit_id \\ 0, request, timeout \\ 5000)
       when unit_id in 0x00..0xFF and is_struct(request) and is_integer(timeout) do
     GenServer.call(name, {:call, unit_id, request, timeout})
   end
 
+  @doc """
+  ## Examples
+
+      iex> Modobuzz.TCP.Client.cast(%Modbuzz.PDU.WriteSingleCoil{output_address: 0 , output_value: true})
+      :ok
+      iex> Modobuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils{starting_address: 0 , quantity_of_coils: 1})
+      :ok
+  """
+  @spec cast(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t()) :: :ok
   def cast(name \\ __MODULE__, unit_id \\ 0, request)
       when unit_id in 0x00..0xFF and is_struct(request) do
     GenServer.cast(name, {:cast, unit_id, request, self()})

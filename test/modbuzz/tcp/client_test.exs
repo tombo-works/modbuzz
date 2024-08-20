@@ -363,7 +363,7 @@ defmodule Modbuzz.TCP.ClientTest do
       send(pid, {:tcp, dummy_port, read_coils_recv_adu(1) <> write_single_coil_recv_adu(2)})
 
       assert_receive({:modbuzz, 0, ^request_1, {:ok, _}})
-      assert_receive({:modbuzz, 0, ^request_2, :ok})
+      assert_receive({:modbuzz, 0, ^request_2, {:ok, _}})
     end
 
     test "message {:tcp, socket, binary}, {:tcp_closed, socket}", %{parent: parent, ref: ref} do

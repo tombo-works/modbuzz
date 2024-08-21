@@ -1,18 +1,20 @@
 version = 1
 
 [[annotations]]
-path = ["mix.exs", "lib/**", "test/**", "README.md"]
+path = ["README.md", "lib/**", "mix.exs", "test/**"]
 SPDX-FileCopyrightText = "2024 Ryota Kinukawa"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = [
-  "mix.lock",
   ".formatter.exs",
-  ".tool-versions",
-  ".gitignore",
+  ".fwatch.exs",
+  ".fwatch.sh",
   ".github/**",
+  ".gitignore",
+  ".tool-versions",
   "REUSE.toml",
+  "mix.lock",
 ]
 SPDX-FileCopyrightText = "2024 Ryota Kinukawa"
 SPDX-License-Identifier = "CC0-1.0"

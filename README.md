@@ -1,8 +1,8 @@
 # Modbuzz
 
-**TODO: Add description**
+Modbuzz is yet another MODBUS TCP library.
 
-## References
+## MODBUS References
 
 - WEB: https://modbus.org/
   - PDF: [MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3](https://modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf)

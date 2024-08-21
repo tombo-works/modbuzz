@@ -1,6 +1,8 @@
 defmodule Modbuzz.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/tombo-works/modbuzz"
+
   def project do
     [
       app: :modbuzz,
@@ -8,6 +10,7 @@ defmodule Modbuzz.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      package: package(),
       consolidate_protocols: Mix.env() != :test,
       test_coverage: test_coverage(),
       dialyzer: dialyzer()
@@ -32,6 +35,14 @@ defmodule Modbuzz.MixProject do
     ]
   end
 
+  defp package() do
+    [
+      files: ~w"LICENSES lib priv README.md REUSE.toml mix.exs",
+      licenses: ["Apache-2.0"],
+      links: %{"GitHub" => @source_url}
+    ]
+  end
+
   defp test_coverage() do
     [
       summary: [threshold: 80],
@@ -52,7 +63,7 @@ defmodule Modbuzz.MixProject do
   defp docs() do
     [
       name: "Modbuzz",
-      source_url: "https://github.com/pojiro/modbuzz",
+      source_url: @source_url,
       docs: [
         main: "readme",
         extras: ["README.md"],

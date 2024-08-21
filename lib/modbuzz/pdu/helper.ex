@@ -9,4 +9,9 @@ defmodule Modbuzz.PDU.Helper do
     |> :binary.bin_to_list()
     |> Enum.flat_map(&for(i <- 0..7, do: (&1 >>> i &&& 1) == 1))
   end
+
+  def module_one_line_doc(module) when is_atom(module) do
+    type = module |> Module.split() |> List.last()
+    "`Modbuzz.PDU` implementation of #{type}."
+  end
 end

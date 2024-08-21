@@ -1,5 +1,22 @@
 defmodule Modbuzz.PDU.WriteSingleCoil do
-  @moduledoc false
+  @moduledoc """
+  #{Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)}
+
+  ## Request type
+
+    - `t()`
+
+  ## Response types
+
+    - `{:ok, nil}`
+    - `{:error, exception: 1..4}`
+
+  """
+
+  @type t :: %__MODULE__{
+          output_address: 0x0000..0xFFFF,
+          output_value: boolean()
+        }
   defstruct [:output_address, :output_value]
 
   defimpl Modbuzz.PDU do

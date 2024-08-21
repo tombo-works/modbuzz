@@ -11,7 +11,7 @@ defmodule Modbuzz.MixProject do
       consolidate_protocols: Mix.env() != :test,
       test_coverage: test_coverage(),
       dialyzer: dialyzer()
-    ]
+    ] ++ docs()
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -46,6 +46,18 @@ defmodule Modbuzz.MixProject do
     [
       plt_local_path: "priv/plts/modbuzz.plt",
       plt_core_path: "priv/plts/core.plt"
+    ]
+  end
+
+  defp docs() do
+    [
+      name: "Modbuzz",
+      source_url: "https://github.com/pojiro/modbuzz",
+      docs: [
+        main: "readme",
+        extras: ["README.md"],
+        nest_modules_by_prefix: [Modbuzz.PDU]
+      ]
     ]
   end
 end

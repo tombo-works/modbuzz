@@ -1,5 +1,22 @@
 defmodule Modbuzz.PDU.ReadDiscreteInputs do
-  @moduledoc false
+  @moduledoc """
+  #{Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)}
+
+  ## Request type
+
+    - `t()`
+
+  ## Response types
+
+    - `{:ok, [] | [boolean()]}`
+    - `{:error, exception: 1..4}`
+
+  """
+
+  @type t :: %__MODULE__{
+          starting_address: 0x0000..0xFFFF,
+          quantity_of_inputs: 1..2000
+        }
   defstruct [:starting_address, :quantity_of_inputs]
 
   defimpl Modbuzz.PDU do

@@ -1,7 +1,8 @@
 defmodule Modbuzz.TCP.TransportBehaviour do
   @moduledoc """
   This behaviour provides the exact same interface as :gen_tcp.
-  We use `identifier()` type as socket type for unit tests.
+
+  We use `identifier()` as socket type for unit tests.
   """
 
   @callback connect(

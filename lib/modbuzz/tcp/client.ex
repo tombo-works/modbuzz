@@ -1,6 +1,6 @@
 defmodule Modbuzz.TCP.Client do
   @moduledoc """
-  TODO: write!!
+  This is MODBUS TCP client `GenServer` module.
   """
 
   use GenServer
@@ -16,38 +16,85 @@ defmodule Modbuzz.TCP.Client do
 
   @unit_id_byte_size 1
 
-  def start_link(args) do
+  @doc """
+  Starts a #{__MODULE__} GenServer process linked to the current process.
+
+  ## Options
+
+    * `:name` - used for name registration as described in the "Name
+      registration" section in the documentation for `GenServer`
+
+    * `:address` - passed through to `:gen_tcp.connect/4`
+
+    * `:port` - passed through to `:gen_tcp.connect/4`
+
+    * `:active` - passed through to `:gen_tcp.connect/4`
+
+  ## Examples
+
+      iex> Modbuzz.TCP.Client.start_link([address: {192, 168, 0, 123}, port: 502, active: false])
+
+  """
+  @spec start_link(keyword()) :: GenServer.on_start()
+  def start_link(args) when is_list(args) do
     name = Keyword.get(args, :name, __MODULE__)
     GenServer.start_link(__MODULE__, args, name: name)
   end
 
+  @doc false
+  def child_spec(args), do: super(args)
+
   @doc """
+  Makes a synchronous call to the server and waits for a response.
+  Only available when active: false.
+
+  The response type is the same as `Modbuzz.PDU.decode/2` of request or `{:error, reason :: term()}`.
+
   ## Examples
 
-      iex> Modobuzz.TCP.Client.call(%Modbuzz.PDU.WriteSingleCoil{output_address: 0 , output_value: true})
+      iex> alias Modbuzz.PDU.{WriteSingleCoil, ReadCoils}
+      [Modbuzz.PDU.WriteSingleCoil, Modbuzz.PDU.ReadCoils]
+      iex> Modbuzz.TCP.Client.call(%WriteSingleCoil{output_address: 0 , output_value: true})
       {:ok, nil}
-      iex> Modobuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{starting_address: 0 , quantity_of_coils: 1})
+      iex> Modbuzz.TCP.Client.call(%ReadCoils{starting_address: 0 , quantity_of_coils: 1})
       {:ok, [true]}
   """
   @spec call(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t(), timeout()) ::
-          {:ok, decoded_response :: term()} | {:error, reason :: term()}
+          {:ok, response :: term()} | {:error, reason :: term()}
   def call(name \\ __MODULE__, unit_id \\ 0, request, timeout \\ 5000)
       when unit_id in 0x00..0xFF and is_struct(request) and is_integer(timeout) do
     GenServer.call(name, {:call, unit_id, request, timeout})
   end
 
   @doc """
+  Casts a request to the server without waiting for a response.
+  Only available when active: true.
+
+  This function always returns :ok regardless of whether the destination server (or node) exists.
+  Therefore it is unknown whether the destination server successfully handled the request.
+
+  Its response is sent as a meessage, looks like
+
+  ```
+  {:modbuzz, unit_id, request, response}
+  ```
+
+  The response type is the same as `Modbuzz.PDU.decode/2` of request or `{:error, reason :: term()}`.
+
   ## Examples
 
-      iex> Modobuzz.TCP.Client.cast(%Modbuzz.PDU.WriteSingleCoil{output_address: 0 , output_value: true})
+      iex> alias Modbuzz.PDU.{WriteSingleCoil, ReadCoils}
+      [Modbuzz.PDU.WriteSingleCoil, Modbuzz.PDU.ReadCoils]
+      iex> Modbuzz.TCP.Client.cast(%WriteSingleCoil{output_address: 0 , output_value: true})
       :ok
-      iex> Modobuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils{starting_address: 0 , quantity_of_coils: 1})
+      iex> Modbuzz.TCP.Client.cast(%ReadCoils{starting_address: 0 , quantity_of_coils: 1})
       :ok
   """
-  @spec cast(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t()) :: :ok
-  def cast(name \\ __MODULE__, unit_id \\ 0, request)
-      when unit_id in 0x00..0xFF and is_struct(request) do
-    GenServer.cast(name, {:cast, unit_id, request, self()})
+  @spec cast(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t(), pid()) ::
+          :ok
+  def cast(name \\ __MODULE__, unit_id \\ 0, request, from_pid \\ self())
+      when unit_id in 0x00..0xFF and is_struct(request) and is_pid(from_pid) do
+    GenServer.cast(name, {:cast, unit_id, request, from_pid})
   end
 
   @impl true
@@ -279,17 +326,20 @@ defmodule Modbuzz.TCP.Client do
     {:noreply, %{state | socket: nil}, {:continue, :connect}}
   end
 
+  @doc false
   def adu(unit_id, request, transaction_id) do
     pdu = PDU.encode(request)
     mbap_header = mbap_header(transaction_id, byte_size(pdu) + @unit_id_byte_size, unit_id)
     <<mbap_header::binary, pdu::binary>>
   end
 
+  @doc false
   def mbap_header(transaction_id, length, unit_id) do
     protocol_id = 0
     <<transaction_id::16, protocol_id::16, length::16, unit_id::8>>
   end
 
+  @doc false
   def pdus(binary, acc \\ []) when is_binary(binary) do
     <<transaction_id::16, _protocol_id::16, length::16, _unit_id::8,
       pdu::binary-size(length - @unit_id_byte_size), rest::binary>> = binary

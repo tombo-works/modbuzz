@@ -1,6 +1,8 @@
 defmodule Modbuzz.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/tombo-works/modbuzz"
+
   def project do
     [
       app: :modbuzz,
@@ -11,7 +13,7 @@ defmodule Modbuzz.MixProject do
       consolidate_protocols: Mix.env() != :test,
       test_coverage: test_coverage(),
       dialyzer: dialyzer()
-    ] ++ docs()
+    ] ++ hex() ++ docs()
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -29,6 +31,17 @@ defmodule Modbuzz.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:mox, "~> 1.0", only: :test}
+    ]
+  end
+
+  defp hex() do
+    [
+      description: "Yet another MODBUS TCP library.",
+      package: [
+        files: ~w"LICENSES lib README.md REUSE.toml mix.exs",
+        licenses: ["Apache-2.0"],
+        links: %{"GitHub" => @source_url}
+      ]
     ]
   end
 
@@ -52,7 +65,7 @@ defmodule Modbuzz.MixProject do
   defp docs() do
     [
       name: "Modbuzz",
-      source_url: "https://github.com/pojiro/modbuzz",
+      source_url: @source_url,
       docs: [
         main: "readme",
         extras: ["README.md"],

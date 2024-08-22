@@ -29,7 +29,7 @@ defmodule Modbuzz.PDU.ReadCoils do
 
     def decode(struct, <<@function_code::8, byte_count::8, coil_status::binary-size(byte_count)>>) do
       coil_status
-      |> Modbuzz.PDU.Helper.bin_to_boolean_bits()
+      |> Modbuzz.PDU.Helper.to_booleans()
       |> Enum.take(struct.quantity_of_coils)
       |> then(&{:ok, &1})
     end

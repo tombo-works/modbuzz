@@ -23,11 +23,29 @@ defmodule Modbuzz.PDU.WriteSingleCoil do
     @function_code 0x05
     @error_code @function_code + 0x80
 
+    @doc """
+        iex> request = %Modbuzz.PDU.WriteSingleCoil{
+        ...>   output_address: 173 - 1,
+        ...>   output_value: true
+        ...> }
+        iex> Modbuzz.PDU.encode(request)
+        <<#{@function_code}, 0x00AC::16, 0xFF00::16>>
+    """
     def encode(struct) do
       output_value = if struct.output_value, do: 0xFF00, else: 0x0000
       <<@function_code::8, struct.output_address::16, output_value::16>>
     end
 
+    @doc """
+        iex> request = %Modbuzz.PDU.WriteSingleCoil{
+        ...>   output_address: 173 - 1,
+        ...>   output_value: true
+        ...> }
+        iex> Modbuzz.PDU.decode(request, <<#{@function_code}, 0x00AC::16, 0xFF00::16>>)
+        {:ok, nil}
+        iex> Modbuzz.PDU.decode(request, <<#{@error_code}, 0x01>>)
+        {:error, [exception_code: 1]}
+    """
     def decode(_struct, <<@function_code::8, _output_address::16, _output_value::16>>) do
       {:ok, nil}
     end

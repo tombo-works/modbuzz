@@ -14,4 +14,12 @@ defmodule Modbuzz.PDU.Helper do
     type = module |> Module.split() |> List.last()
     "`Modbuzz.PDU` implementation of #{type}."
   end
+
+  @spec to_registers(binary()) :: [] | [non_neg_integer()]
+  def to_registers(<<>>), do: []
+
+  def to_registers(binary) when is_binary(binary) do
+    <<register::16, rest::binary>> = binary
+    [register | to_registers(rest)]
+  end
 end

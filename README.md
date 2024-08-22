@@ -1,11 +1,11 @@
 # Modbuzz
 
-[![license](https://img.shields.io/hexpm/l/modbuzz.svg)](https://github.com/tombo-works/modbuzz/blob/main/REUSE.toml)
-[![REUSE](https://api.reuse.software/badge/github.com/tombo-works/modbuzz)](https://api.reuse.software/info/github.com/tombo-works/modbuzz)
 [![hex](https://img.shields.io/hexpm/v/modbuzz.svg)](https://hex.pm/packages/modbuzz)
 [![CI](https://github.com/tombo-works/modbuzz/actions/workflows/ci.yaml/badge.svg)](https://github.com/tombo-works/modbuzz/actions/workflows/ci.yaml)
+[![license](https://img.shields.io/hexpm/l/modbuzz.svg)](https://github.com/tombo-works/modbuzz/blob/main/REUSE.toml)
+[![REUSE](https://api.reuse.software/badge/github.com/tombo-works/modbuzz)](https://api.reuse.software/info/github.com/tombo-works/modbuzz)
 
-Modbuzz is yet another MODBUS TCP library.
+Yet another MODBUS TCP library.
 
 ## MODBUS References
 

@@ -7,4 +7,6 @@ defmodule Modbuzz.PDUTest do
   doctest Modbuzz.PDU.Modbuzz.PDU.ReadInputRegisters
   doctest Modbuzz.PDU.Modbuzz.PDU.WriteSingleCoil
   doctest Modbuzz.PDU.Modbuzz.PDU.WriteSingleRegister
+  doctest Modbuzz.PDU.Modbuzz.PDU.WriteMultipleCoils
+  doctest Modbuzz.PDU.Modbuzz.PDU.WriteMultipleRegisters
 end

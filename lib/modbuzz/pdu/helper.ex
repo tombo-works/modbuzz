@@ -22,4 +22,23 @@ defmodule Modbuzz.PDU.Helper do
     <<register::16, rest::binary>> = binary
     [register | to_registers(rest)]
   end
+
+  @spec to_binary([boolean()]) :: binary()
+  def to_binary([h | _t] = list) when is_list(list) and is_boolean(h) do
+    list
+    |> Enum.chunk_every(8, 8, Stream.cycle([false]))
+    |> Enum.map(fn list ->
+      list
+      |> Enum.with_index()
+      |> Enum.reduce(0, fn {boolean, index}, acc ->
+        if boolean, do: 1 <<< index ||| acc, else: acc
+      end)
+    end)
+    |> Enum.map_join(&<<&1>>)
+  end
+
+  @spec to_binary([0x0000..0xFFFF]) :: binary()
+  def to_binary([h | _t] = list) when is_list(list) and is_integer(h) do
+    list |> Enum.map_join(&<<&1::16>>)
+  end
 end

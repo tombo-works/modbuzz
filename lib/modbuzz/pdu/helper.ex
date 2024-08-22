@@ -30,8 +30,9 @@ defmodule Modbuzz.PDU.Helper do
     |> Enum.map(fn list ->
       list
       |> Enum.with_index()
-      |> Enum.reduce(0, fn {boolean, index}, acc ->
-        if boolean, do: 1 <<< index ||| acc, else: acc
+      |> Enum.reduce(0, fn
+        {true, index}, acc -> 1 <<< index ||| acc
+        {false, _index}, acc -> acc
       end)
     end)
     |> Enum.map_join(&<<&1>>)

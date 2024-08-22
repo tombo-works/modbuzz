@@ -41,9 +41,6 @@ defmodule Modbuzz.TCP.Client do
     GenServer.start_link(__MODULE__, args, name: name)
   end
 
-  @doc false
-  def child_spec(args), do: super(args)
-
   @doc """
   Makes a synchronous call to the server and waits for a response.
   Only available when active: false.

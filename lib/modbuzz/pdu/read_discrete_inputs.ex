@@ -32,7 +32,7 @@ defmodule Modbuzz.PDU.ReadDiscreteInputs do
           <<@function_code::8, byte_count::8, input_status::binary-size(byte_count)>>
         ) do
       input_status
-      |> Modbuzz.PDU.Helper.bin_to_boolean_bits()
+      |> Modbuzz.PDU.Helper.to_booleans()
       |> Enum.take(struct.quantity_of_inputs)
       |> then(&{:ok, &1})
     end

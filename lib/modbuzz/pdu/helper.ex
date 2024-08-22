@@ -3,8 +3,8 @@ defmodule Modbuzz.PDU.Helper do
 
   import Bitwise
 
-  @spec bin_to_boolean_bits(binary()) :: [] | [boolean()]
-  def bin_to_boolean_bits(binary) when is_binary(binary) do
+  @spec to_booleans(binary()) :: [] | [boolean()]
+  def to_booleans(binary) when is_binary(binary) do
     binary
     |> :binary.bin_to_list()
     |> Enum.flat_map(&for(i <- 0..7, do: (&1 >>> i &&& 1) == 1))

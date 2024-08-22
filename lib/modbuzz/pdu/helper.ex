@@ -5,7 +5,7 @@ defmodule Modbuzz.PDU.Helper do
 
   def module_one_line_doc(module) when is_atom(module) do
     type = module |> Module.split() |> List.last()
-    "`Modbuzz.PDU` implementation of #{type}."
+    "`Modbuzz.PDU` implementation for #{type}."
   end
 
   @spec to_booleans(binary()) :: [] | [boolean()]

@@ -45,7 +45,10 @@ defmodule Modbuzz.PDU.WriteSingleRegister do
         iex> Modbuzz.PDU.decode(request, <<#{@error_code}, 0x01>>)
         {:error, [exception_code: 1]}
     """
-    def decode(_struct, <<@function_code::8, _register_address::16, _register_value::16>>) do
+    def decode(
+          %{register_address: register_address, register_value: register_value} = _struct,
+          <<@function_code::8, register_address::16, register_value::16>>
+        ) do
       {:ok, nil}
     end
 

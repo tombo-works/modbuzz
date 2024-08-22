@@ -42,7 +42,7 @@ defmodule Modbuzz.PDU.WriteMultipleCoils do
 
     @doc """
         iex> request = %Modbuzz.PDU.WriteMultipleCoils{
-        ...>   starting_address: 173 - 1,
+        ...>   starting_address: 20 - 1,
         ...>   quantity_of_outputs: 10,
         ...>   outputs_value: true
         ...> }
@@ -51,7 +51,11 @@ defmodule Modbuzz.PDU.WriteMultipleCoils do
         iex> Modbuzz.PDU.decode(request, <<#{@error_code}, 0x01>>)
         {:error, [exception_code: 1]}
     """
-    def decode(_struct, <<@function_code::8, _starting_address::16, _quantity_of_outputs::16>>) do
+    def decode(
+          %{starting_address: starting_address, quantity_of_outputs: quantity_of_outputs} =
+            _struct,
+          <<@function_code::8, starting_address::16, quantity_of_outputs::16>>
+        ) do
       {:ok, nil}
     end
 

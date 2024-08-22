@@ -46,7 +46,10 @@ defmodule Modbuzz.PDU.WriteSingleCoil do
         iex> Modbuzz.PDU.decode(request, <<#{@error_code}, 0x01>>)
         {:error, [exception_code: 1]}
     """
-    def decode(_struct, <<@function_code::8, _output_address::16, _output_value::16>>) do
+    def decode(
+          %{output_address: output_address} = _struct,
+          <<@function_code::8, output_address::16, _output_value::16>>
+        ) do
       {:ok, nil}
     end
 

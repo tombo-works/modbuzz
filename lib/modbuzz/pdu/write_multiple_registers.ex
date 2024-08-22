@@ -51,7 +51,11 @@ defmodule Modbuzz.PDU.WriteMultipleRegisters do
         iex> Modbuzz.PDU.decode(request, <<#{@error_code}, 0x01>>)
         {:error, [exception_code: 1]}
     """
-    def decode(_struct, <<@function_code::8, _starting_address::16, _quantity_of_registers::16>>) do
+    def decode(
+          %{starting_address: starting_address, quantity_of_registers: quantity_of_registers} =
+            _struct,
+          <<@function_code::8, starting_address::16, quantity_of_registers::16>>
+        ) do
       {:ok, nil}
     end
 

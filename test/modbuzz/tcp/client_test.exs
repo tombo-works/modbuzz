@@ -1,6 +1,8 @@
 defmodule Modbuzz.TCP.ClientTest do
   use ExUnit.Case
 
+  @moduletag capture_log: true
+
   import Mox
 
   setup :verify_on_exit!

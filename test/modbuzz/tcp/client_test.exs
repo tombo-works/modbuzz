@@ -18,8 +18,9 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, _dummy_port = make_ref()}
       end)
 
-      assert {:ok, _pid} = Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock)
+      assert {:ok, pid} = Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock)
       assert_receive({^ref, :connect})
+      GenServer.stop(pid)
     end
 
     test "connect/4 succeeded after failed", %{parent: parent, ref: ref} do
@@ -30,8 +31,9 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, _dummy_port = make_ref()}
       end)
 
-      assert {:ok, _pid} = Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock)
+      assert {:ok, pid} = Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock)
       assert_receive({^ref, :connect})
+      GenServer.stop(pid)
     end
   end
 
@@ -46,8 +48,11 @@ defmodule Modbuzz.TCP.ClientTest do
       Modbuzz.TCP.TransportMock
       |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
 
-      assert {:ok, pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      pid =
+        start_link_supervised!(
+          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+          restart: :temporary
+        )
 
       catch_exit(
         Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{
@@ -68,8 +73,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, read_coils_recv_adu(1)}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: false)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -91,8 +98,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, read_coils_recv_adu(2)}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: false)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -115,8 +124,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, read_coils_recv_adu(2)}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: false)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -135,8 +146,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, read_coils_recv_adu(1, _error = true)}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: false)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -159,8 +172,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, _dummy_port = make_ref()}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: false)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -182,8 +197,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:error, :closed}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: false)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -206,8 +223,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:error, :closed}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: false)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -229,8 +248,11 @@ defmodule Modbuzz.TCP.ClientTest do
       Modbuzz.TCP.TransportMock
       |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
 
-      assert {:ok, pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: false)
+      pid =
+        start_link_supervised!(
+          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+          restart: :temporary
+        )
 
       Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils{
         starting_address: 0,
@@ -248,8 +270,10 @@ defmodule Modbuzz.TCP.ClientTest do
         :ok
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -270,8 +294,10 @@ defmodule Modbuzz.TCP.ClientTest do
         :ok
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -293,8 +319,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, _dummy_port = make_ref()}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -315,8 +343,10 @@ defmodule Modbuzz.TCP.ClientTest do
         {:error, :closed}
       end)
 
-      assert {:ok, _pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+        restart: :temporary
+      )
 
       assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils{
                starting_address: 0,
@@ -333,8 +363,11 @@ defmodule Modbuzz.TCP.ClientTest do
       |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_port} end)
       |> expect(:send, fn _, _ -> :ok end)
 
-      assert {:ok, pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      pid =
+        start_link_supervised!(
+          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+          restart: :temporary
+        )
 
       request = %Modbuzz.PDU.ReadCoils{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request) == :ok
@@ -352,8 +385,11 @@ defmodule Modbuzz.TCP.ClientTest do
       |> expect(:send, fn _, _ -> :ok end)
       |> expect(:send, fn _, _ -> :ok end)
 
-      assert {:ok, pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      pid =
+        start_link_supervised!(
+          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+          restart: :temporary
+        )
 
       request_1 = %Modbuzz.PDU.ReadCoils{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request_1) == :ok
@@ -379,8 +415,11 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, dummy_port}
       end)
 
-      assert {:ok, pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      pid =
+        start_link_supervised!(
+          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+          restart: :temporary
+        )
 
       request = %Modbuzz.PDU.ReadCoils{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request) == :ok
@@ -406,8 +445,11 @@ defmodule Modbuzz.TCP.ClientTest do
         :ok
       end)
 
-      assert {:ok, pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      pid =
+        start_link_supervised!(
+          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+          restart: :temporary
+        )
 
       request = %Modbuzz.PDU.ReadCoils{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request) == :ok
@@ -430,8 +472,11 @@ defmodule Modbuzz.TCP.ClientTest do
         {:ok, dummy_port}
       end)
 
-      assert {:ok, pid} =
-               Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock, active: true)
+      pid =
+        start_link_supervised!(
+          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+          restart: :temporary
+        )
 
       request = %Modbuzz.PDU.ReadCoils{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request) == :ok

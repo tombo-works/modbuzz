@@ -1,3 +1,5 @@
+name: CI
+
 env:
   OTP_VERSION: 27.0.1
   ELIXIR_VERSION: 1.17.2

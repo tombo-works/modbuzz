@@ -8,6 +8,11 @@ defmodule Modbuzz.PDU.Helper do
     "`Modbuzz.PDU` implementation for #{type}."
   end
 
+  def module_one_line_doc2(module) when is_atom(module) do
+    ["Modbuzz", "PDU2", modbus_function, type] = Module.split(module)
+    "#{type} struct for #{modbus_function}."
+  end
+
   @spec to_boolean(0xFF00 | 0x0000) :: boolean()
   def to_boolean(0xFF00), do: true
   def to_boolean(0x0000), do: false

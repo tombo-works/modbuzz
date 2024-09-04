@@ -2,6 +2,8 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
   @moduledoc false
 
   defmodule Req do
+    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc2(__MODULE__)
+
     @type t :: %__MODULE__{
             starting_address: 0x0000..0xFFFF,
             quantity_of_outputs: 0x0001..0x07B0,
@@ -60,6 +62,8 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
   end
 
   defmodule Res do
+    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc2(__MODULE__)
+
     @type t :: %__MODULE__{
             starting_address: 0x0000..0xFFFF,
             quantity_of_outputs: 0x0001..0x07B0
@@ -97,6 +101,8 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
   end
 
   defmodule Err do
+    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc2(__MODULE__)
+
     @type t :: %__MODULE__{
             exception_code: 0x01..0x04
           }

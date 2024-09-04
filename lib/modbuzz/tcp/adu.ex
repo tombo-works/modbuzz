@@ -1,4 +1,6 @@
 defmodule Modbuzz.TCP.ADU do
+  @moduledoc false
+
   @unit_id_byte_size 1
 
   defstruct transaction_id: 0x0000, protocol_id: 0x0000, length: 0x0000, unit_id: 0x00, pdu: nil

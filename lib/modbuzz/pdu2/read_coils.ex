@@ -1,4 +1,6 @@
 defmodule Modbuzz.PDU2.ReadCoils do
+  @moduledoc false
+
   defmodule Req do
     @type t :: %__MODULE__{
             starting_address: 0x0000..0xFFFF,

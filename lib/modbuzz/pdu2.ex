@@ -1,4 +1,6 @@
 defmodule Modbuzz.PDU2 do
+  @moduledoc false
+
   defdelegate encode_request(struct), to: Modbuzz.PDU2.Protocol, as: :encode
   defdelegate encode_response(struct), to: Modbuzz.PDU2.Protocol, as: :encode
 

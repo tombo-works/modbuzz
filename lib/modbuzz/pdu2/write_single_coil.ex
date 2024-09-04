@@ -1,4 +1,6 @@
 defmodule Modbuzz.PDU2.WriteSingleCoil do
+  @moduledoc false
+
   defmodule Req do
     @type t :: %__MODULE__{
             output_address: 0x0000..0xFFFF,

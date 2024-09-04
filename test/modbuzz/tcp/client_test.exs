@@ -505,16 +505,24 @@ defmodule Modbuzz.TCP.ClientTest do
   end
 
   defp read_coils_recv_adu(transaction_id, error \\ false) do
-    pdu = if error, do: <<0x01 + 0x80::8, 1::8>>, else: <<0x01::8, 2::8, 0::8, 0::8>>
-    length = byte_size(pdu) + 1
-    unit_id = 0
-    Modbuzz.TCP.Client.mbap_header(transaction_id, length, unit_id) <> pdu
+    if error do
+      %Modbuzz.PDU2.ReadCoils.Err{exception_code: 0x01}
+    else
+      %Modbuzz.PDU2.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
+    end
+    |> Modbuzz.PDU2.encode_response()
+    |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
+    |> Modbuzz.TCP.ADU.encode()
   end
 
   defp write_single_coil_recv_adu(transaction_id, error \\ false) do
-    pdu = if error, do: <<0x05 + 0x80::8, 1::8>>, else: <<0x05::8, 16::16, 0xFF00::16>>
-    length = byte_size(pdu) + 1
-    unit_id = 0
-    Modbuzz.TCP.Client.mbap_header(transaction_id, length, unit_id) <> pdu
+    if error do
+      %Modbuzz.PDU2.WriteSingleCoil.Err{exception_code: 0x01}
+    else
+      %Modbuzz.PDU2.WriteSingleCoil.Res{output_address: 0x0016, output_value: true}
+    end
+    |> Modbuzz.PDU2.encode_response()
+    |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
+    |> Modbuzz.TCP.ADU.encode()
   end
 end

@@ -12,6 +12,7 @@ defmodule Modbuzz.TCP.Client do
     defstruct [:unit_id, :request, :from_pid, :sent_time]
   end
 
+  alias Modbuzz.TCP.ADU
   alias Modbuzz.PDU2
 
   @unit_id_byte_size 1
@@ -130,8 +131,9 @@ defmodule Modbuzz.TCP.Client do
   def handle_continue({:recall, unit_id, request, timeout, from}, %{socket: nil} = state) do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
-    transaction_id = increment_transaction_id(transaction_id)
-    adu = adu(unit_id, request, transaction_id)
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+    adu = PDU2.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+
     state = %{state | transaction_id: transaction_id}
 
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
@@ -166,8 +168,9 @@ defmodule Modbuzz.TCP.Client do
       transactions: transactions
     } = state
 
-    transaction_id = increment_transaction_id(transaction_id)
-    adu = adu(unit_id, request, transaction_id)
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+    adu = PDU2.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+
     state = %{state | transaction_id: transaction_id}
 
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
@@ -196,8 +199,9 @@ defmodule Modbuzz.TCP.Client do
   def handle_call({:call, unit_id, request, timeout}, from, %{active: false} = state) do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
-    transaction_id = increment_transaction_id(transaction_id)
-    adu = adu(unit_id, request, transaction_id)
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+    adu = PDU2.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+
     state = %{state | transaction_id: transaction_id}
 
     with {:send, :ok} <- {:send, transport.send(socket, adu)},
@@ -238,8 +242,9 @@ defmodule Modbuzz.TCP.Client do
       transactions: transactions
     } = state
 
-    transaction_id = increment_transaction_id(transaction_id)
-    adu = adu(unit_id, request, transaction_id)
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+    adu = PDU2.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+
     state = %{state | transaction_id: transaction_id}
 
     case transport.send(socket, adu) do
@@ -324,19 +329,6 @@ defmodule Modbuzz.TCP.Client do
   end
 
   @doc false
-  def adu(unit_id, request, transaction_id) do
-    pdu = PDU2.encode_request(request)
-    mbap_header = mbap_header(transaction_id, byte_size(pdu) + @unit_id_byte_size, unit_id)
-    <<mbap_header::binary, pdu::binary>>
-  end
-
-  @doc false
-  def mbap_header(transaction_id, length, unit_id) do
-    protocol_id = 0
-    <<transaction_id::16, protocol_id::16, length::16, unit_id::8>>
-  end
-
-  @doc false
   def pdus(binary, acc \\ []) when is_binary(binary) do
     <<transaction_id::16, _protocol_id::16, length::16, _unit_id::8,
       pdu::binary-size(length - @unit_id_byte_size), rest::binary>> = binary
@@ -355,9 +347,5 @@ defmodule Modbuzz.TCP.Client do
       [mode: :binary, packet: :raw, active: active],
       _timeout = 3000
     )
-  end
-
-  defp increment_transaction_id(transaction_id) do
-    if transaction_id == 0xFFFF, do: 0, else: transaction_id + 1
   end
 end

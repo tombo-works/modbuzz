@@ -1,4 +1,4 @@
-defmodule Modbuzz.PDU2Test do
+defmodule Modbuzz.PDUTest do
   use ExUnit.Case
 
   for type <- [Req, Res, Err],
@@ -12,6 +12,6 @@ defmodule Modbuzz.PDU2Test do
         WriteMultipleCoils,
         WriteMultipleRegisters
       ] do
-    doctest Module.concat([Modbuzz.PDU2.Protocol.Modbuzz.PDU2, modbus_function, type])
+    doctest Module.concat([Modbuzz.PDU.Protocol.Modbuzz.PDU, modbus_function, type])
   end
 end

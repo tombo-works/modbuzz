@@ -13,7 +13,7 @@ defmodule Modbuzz.TCP.Client do
   end
 
   alias Modbuzz.TCP.ADU
-  alias Modbuzz.PDU2
+  alias Modbuzz.PDU
 
   @doc """
   Starts a #{__MODULE__} GenServer process linked to the current process.
@@ -130,7 +130,7 @@ defmodule Modbuzz.TCP.Client do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU2.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -139,7 +139,7 @@ defmodule Modbuzz.TCP.Client do
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
       [response] =
         for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
-          PDU2.decode_response(pdu)
+          PDU.decode_response(pdu)
         end
 
       GenServer.reply(from, {:ok, response})
@@ -171,7 +171,7 @@ defmodule Modbuzz.TCP.Client do
     } = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU2.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -202,7 +202,7 @@ defmodule Modbuzz.TCP.Client do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU2.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -210,7 +210,7 @@ defmodule Modbuzz.TCP.Client do
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
       [response] =
         for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
-          PDU2.decode_response(pdu)
+          PDU.decode_response(pdu)
         end
 
       {:reply, {:ok, response}, state}
@@ -249,7 +249,7 @@ defmodule Modbuzz.TCP.Client do
     } = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU2.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -295,7 +295,7 @@ defmodule Modbuzz.TCP.Client do
             :modbuzz,
             transaction.unit_id,
             transaction.request,
-            {:ok, PDU2.decode_response(pdu)}
+            {:ok, PDU.decode_response(pdu)}
           }
         )
 

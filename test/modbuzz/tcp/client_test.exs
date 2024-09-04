@@ -57,7 +57,7 @@ defmodule Modbuzz.TCP.ClientTest do
         )
 
       catch_exit(
-        Modbuzz.TCP.Client.call(%Modbuzz.PDU2.ReadCoils.Req{
+        Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
           starting_address: 0,
           quantity_of_coils: 16
         })
@@ -80,12 +80,12 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) ==
                {:ok,
-                %Modbuzz.PDU2.ReadCoils.Res{
+                %Modbuzz.PDU.ReadCoils.Res{
                   byte_count: 0x02,
                   coil_status: List.duplicate(false, 16)
                 }}
@@ -110,12 +110,12 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) ==
                {:ok,
-                %Modbuzz.PDU2.ReadCoils.Res{
+                %Modbuzz.PDU.ReadCoils.Res{
                   byte_count: 0x02,
                   coil_status: List.duplicate(false, 16)
                 }}
@@ -141,12 +141,12 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) ==
                {:ok,
-                %Modbuzz.PDU2.ReadCoils.Res{
+                %Modbuzz.PDU.ReadCoils.Res{
                   byte_count: 0x02,
                   coil_status: List.duplicate(false, 16)
                 }}
@@ -168,10 +168,10 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
-             }) == {:ok, %Modbuzz.PDU2.ReadCoils.Err{exception_code: 0x01}}
+             }) == {:ok, %Modbuzz.PDU.ReadCoils.Err{exception_code: 0x01}}
 
       assert_receive({^ref, :recv})
     end
@@ -194,7 +194,7 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) == {:error, :timeout}
@@ -219,7 +219,7 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) == {:error, :closed}
@@ -245,7 +245,7 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) == {:error, :closed}
@@ -271,7 +271,7 @@ defmodule Modbuzz.TCP.ClientTest do
           restart: :temporary
         )
 
-      Modbuzz.TCP.Client.cast(%Modbuzz.PDU2.ReadCoils.Req{
+      Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
         starting_address: 0,
         quantity_of_coils: 16
       })
@@ -292,7 +292,7 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) == :ok
@@ -316,7 +316,7 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) == :ok
@@ -341,7 +341,7 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) == :ok
@@ -365,7 +365,7 @@ defmodule Modbuzz.TCP.ClientTest do
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU2.ReadCoils.Req{
+      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
              }) == :ok
@@ -386,7 +386,7 @@ defmodule Modbuzz.TCP.ClientTest do
           restart: :temporary
         )
 
-      request = %Modbuzz.PDU2.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
+      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request) == :ok
 
       send(pid, {:tcp, dummy_port, read_coils_recv_adu(1)})
@@ -408,9 +408,9 @@ defmodule Modbuzz.TCP.ClientTest do
           restart: :temporary
         )
 
-      request_1 = %Modbuzz.PDU2.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
+      request_1 = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request_1) == :ok
-      request_2 = %Modbuzz.PDU2.WriteSingleCoil.Req{output_address: 16, output_value: true}
+      request_2 = %Modbuzz.PDU.WriteSingleCoil.Req{output_address: 16, output_value: true}
       assert Modbuzz.TCP.Client.cast(request_2) == :ok
 
       send(pid, {:tcp, dummy_port, read_coils_recv_adu(1) <> write_single_coil_recv_adu(2)})
@@ -438,7 +438,7 @@ defmodule Modbuzz.TCP.ClientTest do
           restart: :temporary
         )
 
-      request = %Modbuzz.PDU2.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
+      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request) == :ok
 
       send(pid, {:tcp, dummy_port, read_coils_recv_adu(1)})
@@ -468,7 +468,7 @@ defmodule Modbuzz.TCP.ClientTest do
           restart: :temporary
         )
 
-      request = %Modbuzz.PDU2.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
+      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request) == :ok
 
       send(pid, {:tcp_closed, dummy_port})
@@ -495,7 +495,7 @@ defmodule Modbuzz.TCP.ClientTest do
           restart: :temporary
         )
 
-      request = %Modbuzz.PDU2.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
+      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
       assert Modbuzz.TCP.Client.cast(request) == :ok
 
       send(pid, {:tcp_error, dummy_port, :reason})
@@ -506,22 +506,22 @@ defmodule Modbuzz.TCP.ClientTest do
 
   defp read_coils_recv_adu(transaction_id, error \\ false) do
     if error do
-      %Modbuzz.PDU2.ReadCoils.Err{exception_code: 0x01}
+      %Modbuzz.PDU.ReadCoils.Err{exception_code: 0x01}
     else
-      %Modbuzz.PDU2.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
+      %Modbuzz.PDU.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
     end
-    |> Modbuzz.PDU2.encode_response()
+    |> Modbuzz.PDU.encode_response()
     |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
     |> Modbuzz.TCP.ADU.encode()
   end
 
   defp write_single_coil_recv_adu(transaction_id, error \\ false) do
     if error do
-      %Modbuzz.PDU2.WriteSingleCoil.Err{exception_code: 0x01}
+      %Modbuzz.PDU.WriteSingleCoil.Err{exception_code: 0x01}
     else
-      %Modbuzz.PDU2.WriteSingleCoil.Res{output_address: 0x0016, output_value: true}
+      %Modbuzz.PDU.WriteSingleCoil.Res{output_address: 0x0016, output_value: true}
     end
-    |> Modbuzz.PDU2.encode_response()
+    |> Modbuzz.PDU.encode_response()
     |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
     |> Modbuzz.TCP.ADU.encode()
   end

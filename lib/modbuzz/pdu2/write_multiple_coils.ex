@@ -1,4 +1,4 @@
-defmodule Modbuzz.PDU2.WriteMultipleCoils do
+defmodule Modbuzz.PDU.WriteMultipleCoils do
   @moduledoc false
 
   defmodule Req do
@@ -13,15 +13,15 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
 
     defstruct [:starting_address, :quantity_of_outputs, :byte_count, :output_values]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @function_code 0x0F
 
       @doc """
-          iex> req = %Modbuzz.PDU2.WriteMultipleCoils.Req{
+          iex> req = %Modbuzz.PDU.WriteMultipleCoils.Req{
           ...>   starting_address: 20 - 1,
           ...>   output_values: [true, false, true, true, false, false, true, true, true, false]
           ...> }
-          iex> Modbuzz.PDU2.Protocol.encode(req)
+          iex> Modbuzz.PDU.Protocol.encode(req)
           <<#{@function_code}, 0x0013::16, 0x000A::16, 0x02, 0xCD01::16>>
       """
       def encode(struct) do
@@ -33,9 +33,9 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
       end
 
       @doc """
-          iex> req = %Modbuzz.PDU2.WriteMultipleCoils.Req{}
-          iex> Modbuzz.PDU2.Protocol.decode(req, <<#{@function_code}, 0x0013::16, 0x000A::16, 0x02, 0xCD01::16>>)
-          %Modbuzz.PDU2.WriteMultipleCoils.Req{
+          iex> req = %Modbuzz.PDU.WriteMultipleCoils.Req{}
+          iex> Modbuzz.PDU.Protocol.decode(req, <<#{@function_code}, 0x0013::16, 0x000A::16, 0x02, 0xCD01::16>>)
+          %Modbuzz.PDU.WriteMultipleCoils.Req{
             starting_address: 20 - 1,
             quantity_of_outputs: 10,
             byte_count: 2,
@@ -71,15 +71,15 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
 
     defstruct [:starting_address, :quantity_of_outputs]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @function_code 0x0F
 
       @doc """
-          iex> res = %Modbuzz.PDU2.WriteMultipleCoils.Res{
+          iex> res = %Modbuzz.PDU.WriteMultipleCoils.Res{
           ...>   starting_address: 20 - 1,
           ...>   quantity_of_outputs: 10
           ...> }
-          iex> Modbuzz.PDU2.Protocol.encode(res)
+          iex> Modbuzz.PDU.Protocol.encode(res)
           <<#{@function_code}, 0x0013::16, 0x000A::16>>
       """
       def encode(struct) do
@@ -87,9 +87,9 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
       end
 
       @doc """
-          iex> res = %Modbuzz.PDU2.WriteMultipleCoils.Res{}
-          iex> Modbuzz.PDU2.Protocol.decode(res, <<#{@function_code}, 0x0013::16, 0x000A::16>>)
-          %Modbuzz.PDU2.WriteMultipleCoils.Res{
+          iex> res = %Modbuzz.PDU.WriteMultipleCoils.Res{}
+          iex> Modbuzz.PDU.Protocol.decode(res, <<#{@function_code}, 0x0013::16, 0x000A::16>>)
+          %Modbuzz.PDU.WriteMultipleCoils.Res{
             starting_address: 20 - 1,
             quantity_of_outputs: 10
           }
@@ -109,12 +109,12 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
 
     defstruct [:exception_code]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @error_code 0x0F + 0x80
 
       @doc """
-          iex> err = %Modbuzz.PDU2.WriteMultipleCoils.Err{exception_code: 0x01}
-          iex> Modbuzz.PDU2.Protocol.encode(err)
+          iex> err = %Modbuzz.PDU.WriteMultipleCoils.Err{exception_code: 0x01}
+          iex> Modbuzz.PDU.Protocol.encode(err)
           <<#{@error_code}, 0x01>>
       """
       def encode(struct) do
@@ -122,9 +122,9 @@ defmodule Modbuzz.PDU2.WriteMultipleCoils do
       end
 
       @doc """
-          iex> err = %Modbuzz.PDU2.WriteMultipleCoils.Err{}
-          iex> Modbuzz.PDU2.Protocol.decode(err, <<#{@error_code}, 0x01>>)
-          %Modbuzz.PDU2.WriteMultipleCoils.Err{exception_code: 0x01}
+          iex> err = %Modbuzz.PDU.WriteMultipleCoils.Err{}
+          iex> Modbuzz.PDU.Protocol.decode(err, <<#{@error_code}, 0x01>>)
+          %Modbuzz.PDU.WriteMultipleCoils.Err{exception_code: 0x01}
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}

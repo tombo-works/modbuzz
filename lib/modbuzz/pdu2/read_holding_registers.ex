@@ -1,4 +1,4 @@
-defmodule Modbuzz.PDU2.ReadHoldingRegisters do
+defmodule Modbuzz.PDU.ReadHoldingRegisters do
   @moduledoc false
 
   defmodule Req do
@@ -11,15 +11,15 @@ defmodule Modbuzz.PDU2.ReadHoldingRegisters do
 
     defstruct [:starting_address, :quantity_of_registers]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @function_code 0x03
 
       @doc """
-          iex> req = %Modbuzz.PDU2.ReadHoldingRegisters.Req{
+          iex> req = %Modbuzz.PDU.ReadHoldingRegisters.Req{
           ...>   starting_address: 108 - 1,
           ...>   quantity_of_registers: 3
           ...> }
-          iex> Modbuzz.PDU2.Protocol.encode(req)
+          iex> Modbuzz.PDU.Protocol.encode(req)
           <<#{@function_code}, 0x006B::16, 0x0003::16>>
       """
       def encode(struct) do
@@ -27,9 +27,9 @@ defmodule Modbuzz.PDU2.ReadHoldingRegisters do
       end
 
       @doc """
-          iex> req = %Modbuzz.PDU2.ReadHoldingRegisters.Req{}
-          iex> Modbuzz.PDU2.Protocol.decode(req, <<#{@function_code}, 0x006B::16, 0x0003::16>>)
-          %Modbuzz.PDU2.ReadHoldingRegisters.Req{starting_address: 108 - 1, quantity_of_registers: 3}
+          iex> req = %Modbuzz.PDU.ReadHoldingRegisters.Req{}
+          iex> Modbuzz.PDU.Protocol.decode(req, <<#{@function_code}, 0x006B::16, 0x0003::16>>)
+          %Modbuzz.PDU.ReadHoldingRegisters.Req{starting_address: 108 - 1, quantity_of_registers: 3}
       """
       def decode(struct, <<@function_code, starting_address::16, quantity_of_registers::16>>) do
         %{
@@ -51,15 +51,15 @@ defmodule Modbuzz.PDU2.ReadHoldingRegisters do
 
     defstruct [:byte_count, :register_value]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @function_code 0x03
 
       @doc """
-          iex> res = %Modbuzz.PDU2.ReadHoldingRegisters.Res{
+          iex> res = %Modbuzz.PDU.ReadHoldingRegisters.Res{
           ...>   byte_count: 0x06,
           ...>   register_value: [555, 0, 100]
           ...> }
-          iex> Modbuzz.PDU2.Protocol.encode(res)
+          iex> Modbuzz.PDU.Protocol.encode(res)
           <<#{@function_code}, 0x06, 0x02, 0x2B, 0x00, 0x00, 0x00, 0x64>>
       """
       def encode(struct) do
@@ -68,9 +68,9 @@ defmodule Modbuzz.PDU2.ReadHoldingRegisters do
       end
 
       @doc """
-          iex> res = %Modbuzz.PDU2.ReadHoldingRegisters.Res{}
-          iex> Modbuzz.PDU2.Protocol.decode(res, <<#{@function_code}, 0x06, 0x02, 0x2B, 0x00, 0x00, 0x00, 0x64>>)
-          %Modbuzz.PDU2.ReadHoldingRegisters.Res{
+          iex> res = %Modbuzz.PDU.ReadHoldingRegisters.Res{}
+          iex> Modbuzz.PDU.Protocol.decode(res, <<#{@function_code}, 0x06, 0x02, 0x2B, 0x00, 0x00, 0x00, 0x64>>)
+          %Modbuzz.PDU.ReadHoldingRegisters.Res{
             byte_count: 0x06,
             register_value: [555, 0, 100]
           }
@@ -94,12 +94,12 @@ defmodule Modbuzz.PDU2.ReadHoldingRegisters do
 
     defstruct [:exception_code]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @error_code 0x03 + 0x80
 
       @doc """
-          iex> err = %Modbuzz.PDU2.ReadHoldingRegisters.Err{exception_code: 0x01}
-          iex> Modbuzz.PDU2.Protocol.encode(err)
+          iex> err = %Modbuzz.PDU.ReadHoldingRegisters.Err{exception_code: 0x01}
+          iex> Modbuzz.PDU.Protocol.encode(err)
           <<#{@error_code}, 0x01>>
       """
       def encode(struct) do
@@ -107,9 +107,9 @@ defmodule Modbuzz.PDU2.ReadHoldingRegisters do
       end
 
       @doc """
-          iex> err = %Modbuzz.PDU2.ReadHoldingRegisters.Err{}
-          iex> Modbuzz.PDU2.Protocol.decode(err, <<#{@error_code}, 0x01>>)
-          %Modbuzz.PDU2.ReadHoldingRegisters.Err{exception_code: 0x01}
+          iex> err = %Modbuzz.PDU.ReadHoldingRegisters.Err{}
+          iex> Modbuzz.PDU.Protocol.decode(err, <<#{@error_code}, 0x01>>)
+          %Modbuzz.PDU.ReadHoldingRegisters.Err{exception_code: 0x01}
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}

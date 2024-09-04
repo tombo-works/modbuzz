@@ -1,4 +1,4 @@
-defmodule Modbuzz.PDU2.WriteSingleCoil do
+defmodule Modbuzz.PDU.WriteSingleCoil do
   @moduledoc false
 
   defmodule Req do
@@ -11,15 +11,15 @@ defmodule Modbuzz.PDU2.WriteSingleCoil do
 
     defstruct [:output_address, :output_value]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @function_code 0x05
 
       @doc """
-          iex> req = %Modbuzz.PDU2.WriteSingleCoil.Req{
+          iex> req = %Modbuzz.PDU.WriteSingleCoil.Req{
           ...>   output_address: 173 - 1,
           ...>   output_value: true
           ...> }
-          iex> Modbuzz.PDU2.Protocol.encode(req)
+          iex> Modbuzz.PDU.Protocol.encode(req)
           <<#{@function_code}, 0x00AC::16, 0xFF00::16>>
       """
       def encode(struct) do
@@ -28,9 +28,9 @@ defmodule Modbuzz.PDU2.WriteSingleCoil do
       end
 
       @doc """
-          iex> req = %Modbuzz.PDU2.WriteSingleCoil.Req{}
-          iex> Modbuzz.PDU2.Protocol.decode(req, <<#{@function_code}, 0x00AC::16, 0xFF00::16>>)
-          %Modbuzz.PDU2.WriteSingleCoil.Req{output_address: 173 - 1, output_value: true}
+          iex> req = %Modbuzz.PDU.WriteSingleCoil.Req{}
+          iex> Modbuzz.PDU.Protocol.decode(req, <<#{@function_code}, 0x00AC::16, 0xFF00::16>>)
+          %Modbuzz.PDU.WriteSingleCoil.Req{output_address: 173 - 1, output_value: true}
       """
       def decode(struct, <<@function_code, output_address::16, output_value::16>>) do
         output_value = Modbuzz.PDU.Helper.to_boolean(output_value)
@@ -49,15 +49,15 @@ defmodule Modbuzz.PDU2.WriteSingleCoil do
 
     defstruct [:output_address, :output_value]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @function_code 0x05
 
       @doc """
-          iex> res = %Modbuzz.PDU2.WriteSingleCoil.Res{
+          iex> res = %Modbuzz.PDU.WriteSingleCoil.Res{
           ...>   output_address: 173 - 1,
           ...>   output_value: true
           ...> }
-          iex> Modbuzz.PDU2.Protocol.encode(res)
+          iex> Modbuzz.PDU.Protocol.encode(res)
           <<#{@function_code}, 0x00, 0xAC, 0xFF, 0x00>>
       """
       def encode(struct) do
@@ -66,9 +66,9 @@ defmodule Modbuzz.PDU2.WriteSingleCoil do
       end
 
       @doc """
-          iex> res = %Modbuzz.PDU2.WriteSingleCoil.Res{}
-          iex> Modbuzz.PDU2.Protocol.decode(res, <<#{@function_code}, 0x00, 0xAC, 0xFF, 0x00>>)
-          %Modbuzz.PDU2.WriteSingleCoil.Res{
+          iex> res = %Modbuzz.PDU.WriteSingleCoil.Res{}
+          iex> Modbuzz.PDU.Protocol.decode(res, <<#{@function_code}, 0x00, 0xAC, 0xFF, 0x00>>)
+          %Modbuzz.PDU.WriteSingleCoil.Res{
             output_address: 173 - 1,
             output_value: true
           }
@@ -92,12 +92,12 @@ defmodule Modbuzz.PDU2.WriteSingleCoil do
 
     defstruct [:exception_code]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @error_code 0x05 + 0x80
 
       @doc """
-          iex> err = %Modbuzz.PDU2.WriteSingleCoil.Err{exception_code: 0x01}
-          iex> Modbuzz.PDU2.Protocol.encode(err)
+          iex> err = %Modbuzz.PDU.WriteSingleCoil.Err{exception_code: 0x01}
+          iex> Modbuzz.PDU.Protocol.encode(err)
           <<#{@error_code}, 0x01>>
       """
       def encode(struct) do
@@ -105,9 +105,9 @@ defmodule Modbuzz.PDU2.WriteSingleCoil do
       end
 
       @doc """
-          iex> err = %Modbuzz.PDU2.WriteSingleCoil.Err{}
-          iex> Modbuzz.PDU2.Protocol.decode(err, <<#{@error_code}, 0x01>>)
-          %Modbuzz.PDU2.WriteSingleCoil.Err{exception_code: 0x01}
+          iex> err = %Modbuzz.PDU.WriteSingleCoil.Err{}
+          iex> Modbuzz.PDU.Protocol.decode(err, <<#{@error_code}, 0x01>>)
+          %Modbuzz.PDU.WriteSingleCoil.Err{exception_code: 0x01}
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}

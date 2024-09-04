@@ -9,7 +9,7 @@ defmodule Modbuzz.PDU.Helper do
   end
 
   def module_one_line_doc2(module) when is_atom(module) do
-    ["Modbuzz", "PDU2", modbus_function, type] = Module.split(module)
+    ["Modbuzz", "PDU", modbus_function, type] = Module.split(module)
     "#{type} struct for #{modbus_function}."
   end
 

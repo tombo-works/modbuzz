@@ -70,8 +70,7 @@ defmodule Modbuzz.MixProject do
         main: "readme",
         extras: ["README.md"],
         nest_modules_by_prefix: [
-          Modbuzz.PDU,
-          Modbuzz.PDU2
+          Modbuzz.PDU
         ]
       ]
     ]

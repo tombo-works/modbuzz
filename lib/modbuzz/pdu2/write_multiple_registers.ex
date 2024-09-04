@@ -1,4 +1,4 @@
-defmodule Modbuzz.PDU2.WriteMultipleRegisters do
+defmodule Modbuzz.PDU.WriteMultipleRegisters do
   @moduledoc false
 
   defmodule Req do
@@ -13,15 +13,15 @@ defmodule Modbuzz.PDU2.WriteMultipleRegisters do
 
     defstruct [:starting_address, :quantity_of_registers, :byte_count, :register_values]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @function_code 0x10
 
       @doc """
-          iex> req = %Modbuzz.PDU2.WriteMultipleRegisters.Req{
+          iex> req = %Modbuzz.PDU.WriteMultipleRegisters.Req{
           ...>   starting_address: 2 - 1,
           ...>   register_values: [0x000A, 0x0102]
           ...> }
-          iex> Modbuzz.PDU2.Protocol.encode(req)
+          iex> Modbuzz.PDU.Protocol.encode(req)
           <<#{@function_code}, 0x0001::16, 0x0002::16, 0x04, 0x000A::16, 0x0102::16>>
       """
       def encode(struct) do
@@ -33,9 +33,9 @@ defmodule Modbuzz.PDU2.WriteMultipleRegisters do
       end
 
       @doc """
-          iex> req = %Modbuzz.PDU2.WriteMultipleRegisters.Req{}
-          iex> Modbuzz.PDU2.Protocol.decode(req, <<#{@function_code}, 0x0001::16, 0x0002::16, 0x04, 0x000A::16, 0x0102::16>>)
-          %Modbuzz.PDU2.WriteMultipleRegisters.Req{
+          iex> req = %Modbuzz.PDU.WriteMultipleRegisters.Req{}
+          iex> Modbuzz.PDU.Protocol.decode(req, <<#{@function_code}, 0x0001::16, 0x0002::16, 0x04, 0x000A::16, 0x0102::16>>)
+          %Modbuzz.PDU.WriteMultipleRegisters.Req{
             starting_address: 2 - 1,
             quantity_of_registers: 2,
             byte_count: 4,
@@ -71,15 +71,15 @@ defmodule Modbuzz.PDU2.WriteMultipleRegisters do
 
     defstruct [:starting_address, :quantity_of_registers]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @function_code 0x10
 
       @doc """
-          iex> res = %Modbuzz.PDU2.WriteMultipleRegisters.Res{
+          iex> res = %Modbuzz.PDU.WriteMultipleRegisters.Res{
           ...>   starting_address: 2 - 1,
           ...>   quantity_of_registers: 2
           ...> }
-          iex> Modbuzz.PDU2.Protocol.encode(res)
+          iex> Modbuzz.PDU.Protocol.encode(res)
           <<#{@function_code}, 0x0001::16, 0x0002::16>>
       """
       def encode(struct) do
@@ -87,9 +87,9 @@ defmodule Modbuzz.PDU2.WriteMultipleRegisters do
       end
 
       @doc """
-          iex> res = %Modbuzz.PDU2.WriteMultipleRegisters.Res{}
-          iex> Modbuzz.PDU2.Protocol.decode(res, <<#{@function_code}, 0x0001::16, 0x0002::16>>)
-          %Modbuzz.PDU2.WriteMultipleRegisters.Res{
+          iex> res = %Modbuzz.PDU.WriteMultipleRegisters.Res{}
+          iex> Modbuzz.PDU.Protocol.decode(res, <<#{@function_code}, 0x0001::16, 0x0002::16>>)
+          %Modbuzz.PDU.WriteMultipleRegisters.Res{
             starting_address: 2 - 1,
             quantity_of_registers: 2
           }
@@ -113,12 +113,12 @@ defmodule Modbuzz.PDU2.WriteMultipleRegisters do
 
     defstruct [:exception_code]
 
-    defimpl Modbuzz.PDU2.Protocol do
+    defimpl Modbuzz.PDU.Protocol do
       @error_code 0x10 + 0x80
 
       @doc """
-          iex> err = %Modbuzz.PDU2.WriteMultipleRegisters.Err{exception_code: 0x01}
-          iex> Modbuzz.PDU2.Protocol.encode(err)
+          iex> err = %Modbuzz.PDU.WriteMultipleRegisters.Err{exception_code: 0x01}
+          iex> Modbuzz.PDU.Protocol.encode(err)
           <<#{@error_code}, 0x01>>
       """
       def encode(struct) do
@@ -126,9 +126,9 @@ defmodule Modbuzz.PDU2.WriteMultipleRegisters do
       end
 
       @doc """
-          iex> err = %Modbuzz.PDU2.WriteMultipleRegisters.Err{}
-          iex> Modbuzz.PDU2.Protocol.decode(err, <<#{@error_code}, 0x01>>)
-          %Modbuzz.PDU2.WriteMultipleRegisters.Err{exception_code: 0x01}
+          iex> err = %Modbuzz.PDU.WriteMultipleRegisters.Err{}
+          iex> Modbuzz.PDU.Protocol.decode(err, <<#{@error_code}, 0x01>>)
+          %Modbuzz.PDU.WriteMultipleRegisters.Err{exception_code: 0x01}
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}

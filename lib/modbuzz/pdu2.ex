@@ -7,6 +7,7 @@ defmodule Modbuzz.PDU2 do
   for {modbus_function, modbus_function_code} <- [
         {ReadCoils, 0x01},
         {ReadDiscreteInputs, 0x02},
+        {ReadHoldingRegisters, 0x03},
         {WriteSingleCoil, 0x05}
       ] do
     req_module = Module.concat([Modbuzz.PDU2, modbus_function, Req])

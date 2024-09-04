@@ -9,7 +9,8 @@ defmodule Modbuzz.PDU2Test do
         ReadInputRegisters,
         WriteSingleCoil,
         WriteSingleRegister,
-        WriteMultipleCoils
+        WriteMultipleCoils,
+        WriteMultipleRegisters
       ] do
     doctest Module.concat([Modbuzz.PDU2.Protocol.Modbuzz.PDU2, modbus_function, type])
   end

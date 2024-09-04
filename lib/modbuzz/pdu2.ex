@@ -11,7 +11,8 @@ defmodule Modbuzz.PDU2 do
         {ReadInputRegisters, 0x04},
         {WriteSingleCoil, 0x05},
         {WriteSingleRegister, 0x06},
-        {WriteMultipleCoils, 0x0F}
+        {WriteMultipleCoils, 0x0F},
+        {WriteMultipleRegisters, 0x10}
       ] do
     req_module = Module.concat([Modbuzz.PDU2, modbus_function, Req])
     res_module = Module.concat([Modbuzz.PDU2, modbus_function, Res])

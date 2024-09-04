@@ -12,7 +12,7 @@ defmodule Modbuzz.TCP.Client do
     defstruct [:unit_id, :request, :from_pid, :sent_time]
   end
 
-  alias Modbuzz.PDU
+  alias Modbuzz.PDU2
 
   @unit_id_byte_size 1
 
@@ -137,8 +137,8 @@ defmodule Modbuzz.TCP.Client do
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
          {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
-      GenServer.reply(from, decoded_pdu)
+      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU2.decode_response(pdu)
+      GenServer.reply(from, {:ok, decoded_pdu})
       {:noreply, %{state | socket: socket}}
     else
       {:connect, {:error, reason} = error} ->
@@ -202,8 +202,8 @@ defmodule Modbuzz.TCP.Client do
 
     with {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
-      {:reply, decoded_pdu, state}
+      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU2.decode_response(pdu)
+      {:reply, {:ok, decoded_pdu}, state}
     else
       {:send, {:error, reason}} ->
         Logger.warning(
@@ -283,7 +283,7 @@ defmodule Modbuzz.TCP.Client do
             :modbuzz,
             transaction.unit_id,
             transaction.request,
-            PDU.decode(transaction.request, pdu)
+            {:ok, PDU2.decode_response(pdu)}
           }
         )
 
@@ -325,7 +325,7 @@ defmodule Modbuzz.TCP.Client do
 
   @doc false
   def adu(unit_id, request, transaction_id) do
-    pdu = PDU.encode(request)
+    pdu = PDU2.encode_request(request)
     mbap_header = mbap_header(transaction_id, byte_size(pdu) + @unit_id_byte_size, unit_id)
     <<mbap_header::binary, pdu::binary>>
   end

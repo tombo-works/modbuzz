@@ -4,11 +4,6 @@ defmodule Modbuzz.PDU.Helper do
   import Bitwise
 
   def module_one_line_doc(module) when is_atom(module) do
-    type = module |> Module.split() |> List.last()
-    "`Modbuzz.PDU` implementation for #{type}."
-  end
-
-  def module_one_line_doc2(module) when is_atom(module) do
     ["Modbuzz", "PDU", modbus_function, type] = Module.split(module)
     "#{type} struct for #{modbus_function}."
   end

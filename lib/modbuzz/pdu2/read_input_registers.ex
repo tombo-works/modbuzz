@@ -2,7 +2,7 @@ defmodule Modbuzz.PDU.ReadInputRegisters do
   @moduledoc false
 
   defmodule Req do
-    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc2(__MODULE__)
+    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)
 
     @type t :: %__MODULE__{
             starting_address: 0x0000..0xFFFF,
@@ -45,7 +45,7 @@ defmodule Modbuzz.PDU.ReadInputRegisters do
   end
 
   defmodule Res do
-    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc2(__MODULE__)
+    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)
 
     @type t :: %__MODULE__{
             byte_count: byte(),
@@ -89,7 +89,7 @@ defmodule Modbuzz.PDU.ReadInputRegisters do
   end
 
   defmodule Err do
-    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc2(__MODULE__)
+    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)
 
     @type t :: %__MODULE__{
             exception_code: 0x01..0x04

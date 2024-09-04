@@ -171,7 +171,7 @@ defmodule Modbuzz.TCP.ClientTest do
       assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
                starting_address: 0,
                quantity_of_coils: 16
-             }) == {:ok, %Modbuzz.PDU.ReadCoils.Err{exception_code: 0x01}}
+             }) == {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 0x01}}
 
       assert_receive({^ref, :recv})
     end
@@ -510,7 +510,7 @@ defmodule Modbuzz.TCP.ClientTest do
     else
       %Modbuzz.PDU.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
     end
-    |> Modbuzz.PDU.encode_response()
+    |> Modbuzz.PDU.encode_response!()
     |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
     |> Modbuzz.TCP.ADU.encode()
   end
@@ -521,7 +521,7 @@ defmodule Modbuzz.TCP.ClientTest do
     else
       %Modbuzz.PDU.WriteSingleCoil.Res{output_address: 0x0016, output_value: true}
     end
-    |> Modbuzz.PDU.encode_response()
+    |> Modbuzz.PDU.encode_response!()
     |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
     |> Modbuzz.TCP.ADU.encode()
   end

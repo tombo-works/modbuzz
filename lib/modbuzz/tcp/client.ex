@@ -44,7 +44,7 @@ defmodule Modbuzz.TCP.Client do
   Makes a synchronous call to the server and waits for a response.
   Only available when active: false.
 
-  The response type is `{:ok, %Res{} | %Err{}}` or `{:error, reason :: term()}`.
+  The response type is `{:ok, %Res{}}` or `{:error, %Err{} | reason :: term()}`.
 
   ## Examples
 
@@ -80,7 +80,7 @@ defmodule Modbuzz.TCP.Client do
   {:modbuzz, unit_id, request, response}
   ```
 
-  The response type is `{:ok, %Res{} | %Err{}}` or `{:error, reason :: term()}`.
+  The response type is `{:ok, %Res{}}` or `{:error, %Err{} | reason :: term()}`.
 
   ## Examples
 
@@ -140,19 +140,19 @@ defmodule Modbuzz.TCP.Client do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
          {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [response] =
+      [res_tuple] =
         for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
           PDU.decode_response(pdu)
         end
 
-      GenServer.reply(from, {:ok, response})
+      GenServer.reply(from, res_tuple)
       {:noreply, %{state | socket: socket}}
     else
       {:connect, {:error, reason} = error} ->
@@ -181,7 +181,7 @@ defmodule Modbuzz.TCP.Client do
     } = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -212,18 +212,18 @@ defmodule Modbuzz.TCP.Client do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
     with {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [response] =
+      [res_tuple] =
         for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
           PDU.decode_response(pdu)
         end
 
-      {:reply, {:ok, response}, state}
+      {:reply, res_tuple, state}
     else
       {:send, {:error, reason}} ->
         Logger.warning(
@@ -259,7 +259,7 @@ defmodule Modbuzz.TCP.Client do
     } = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode_request(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -298,6 +298,7 @@ defmodule Modbuzz.TCP.Client do
       ADU.decode(binary, [])
       |> Enum.reduce(transactions, fn %ADU{transaction_id: transaction_id, pdu: pdu}, acc ->
         {transaction, acc} = Map.pop(acc, transaction_id)
+        res_tuple = PDU.decode_response(pdu)
 
         send(
           transaction.from_pid,
@@ -305,7 +306,7 @@ defmodule Modbuzz.TCP.Client do
             :modbuzz,
             transaction.unit_id,
             transaction.request,
-            {:ok, PDU.decode_response(pdu)}
+            res_tuple
           }
         )
 

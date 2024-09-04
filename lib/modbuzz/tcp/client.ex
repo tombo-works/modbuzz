@@ -55,7 +55,12 @@ defmodule Modbuzz.TCP.Client do
       iex> Modbuzz.TCP.Client.call(%ReadCoils{starting_address: 0 , quantity_of_coils: 1})
       {:ok, [true]}
   """
-  @spec call(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t(), timeout()) ::
+  @spec call(
+          GenServer.server(),
+          unit_id :: 0x00..0xFF,
+          request :: Modbuzz.PDU.Protocol.t(),
+          timeout()
+        ) ::
           {:ok, response :: term()} | {:error, reason :: term()}
   def call(name \\ __MODULE__, unit_id \\ 0, request, timeout \\ 5000)
       when unit_id in 0x00..0xFF and is_struct(request) and is_integer(timeout) do
@@ -86,7 +91,12 @@ defmodule Modbuzz.TCP.Client do
       iex> Modbuzz.TCP.Client.cast(%ReadCoils{starting_address: 0 , quantity_of_coils: 1})
       :ok
   """
-  @spec cast(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t(), pid()) ::
+  @spec cast(
+          GenServer.server(),
+          unit_id :: 0x00..0xFF,
+          request :: Modbuzz.PDU.Protocol.t(),
+          pid()
+        ) ::
           :ok
   def cast(name \\ __MODULE__, unit_id \\ 0, request, from_pid \\ self())
       when unit_id in 0x00..0xFF and is_struct(request) and is_pid(from_pid) do

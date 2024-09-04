@@ -15,8 +15,6 @@ defmodule Modbuzz.TCP.Client do
   alias Modbuzz.TCP.ADU
   alias Modbuzz.PDU2
 
-  @unit_id_byte_size 1
-
   @doc """
   Starts a #{__MODULE__} GenServer process linked to the current process.
 
@@ -139,8 +137,12 @@ defmodule Modbuzz.TCP.Client do
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
          {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU2.decode_response(pdu)
-      GenServer.reply(from, {:ok, decoded_pdu})
+      [response] =
+        for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
+          PDU2.decode_response(pdu)
+        end
+
+      GenServer.reply(from, {:ok, response})
       {:noreply, %{state | socket: socket}}
     else
       {:connect, {:error, reason} = error} ->
@@ -206,8 +208,12 @@ defmodule Modbuzz.TCP.Client do
 
     with {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU2.decode_response(pdu)
-      {:reply, {:ok, decoded_pdu}, state}
+      [response] =
+        for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
+          PDU2.decode_response(pdu)
+        end
+
+      {:reply, {:ok, response}, state}
     else
       {:send, {:error, reason}} ->
         Logger.warning(
@@ -279,7 +285,8 @@ defmodule Modbuzz.TCP.Client do
     %{transactions: transactions} = state
 
     transactions =
-      Enum.reduce(pdus(binary), transactions, fn {transaction_id, pdu}, acc ->
+      ADU.decode(binary, [])
+      |> Enum.reduce(transactions, fn %ADU{transaction_id: transaction_id, pdu: pdu}, acc ->
         {transaction, acc} = Map.pop(acc, transaction_id)
 
         send(
@@ -326,16 +333,6 @@ defmodule Modbuzz.TCP.Client do
     Logger.error("#{__MODULE__}: transport error, the reason is #{inspect(reason)}.")
     :ok = transport.close(socket)
     {:noreply, %{state | socket: nil}, {:continue, :connect}}
-  end
-
-  @doc false
-  def pdus(binary, acc \\ []) when is_binary(binary) do
-    <<transaction_id::16, _protocol_id::16, length::16, _unit_id::8,
-      pdu::binary-size(length - @unit_id_byte_size), rest::binary>> = binary
-
-    acc = [{transaction_id, pdu} | acc]
-
-    if rest == <<>>, do: Enum.reverse(acc), else: pdus(rest, acc)
   end
 
   defp gen_tcp_connect(state) do

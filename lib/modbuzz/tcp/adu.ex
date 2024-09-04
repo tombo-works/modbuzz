@@ -29,6 +29,25 @@ defmodule Modbuzz.TCP.ADU do
     }
   end
 
+  def decode(
+        <<transaction_id::16, protocol_id::16, length::16, unit_id, pdu::binary-size(length - 1),
+          rest::binary>>,
+        acc
+      ) do
+    acc = [
+      %__MODULE__{
+        transaction_id: transaction_id,
+        protocol_id: protocol_id,
+        length: length,
+        unit_id: unit_id,
+        pdu: pdu
+      }
+      | acc
+    ]
+
+    if rest == <<>>, do: Enum.reverse(acc), else: decode(rest, acc)
+  end
+
   def increment_transaction_id(transaction_id) do
     if transaction_id == 0xFFFF, do: 0, else: transaction_id + 1
   end

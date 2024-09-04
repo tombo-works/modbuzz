@@ -44,16 +44,16 @@ defmodule Modbuzz.TCP.Client do
   Makes a synchronous call to the server and waits for a response.
   Only available when active: false.
 
-  The response type is the same as `Modbuzz.PDU.decode/2` of request or `{:error, reason :: term()}`.
+  The response type is `{:ok, %Res{} | %Err{}}` or `{:error, reason :: term()}`.
 
   ## Examples
 
       iex> alias Modbuzz.PDU.{WriteSingleCoil, ReadCoils}
       [Modbuzz.PDU.WriteSingleCoil, Modbuzz.PDU.ReadCoils]
-      iex> Modbuzz.TCP.Client.call(%WriteSingleCoil{output_address: 0 , output_value: true})
-      {:ok, nil}
-      iex> Modbuzz.TCP.Client.call(%ReadCoils{starting_address: 0 , quantity_of_coils: 1})
-      {:ok, [true]}
+      iex> Modbuzz.TCP.Client.call(%WriteSingleCoil.Req{output_address: 0 , output_value: true})
+      {:ok, %WriteSingleCoil.Res{output_address: 0 , output_value: true}}
+      iex> Modbuzz.TCP.Client.call(%ReadCoils.Req{starting_address: 0 , quantity_of_coils: 1})
+      {:ok, %ReadCoils.Res{byte_count: 1, [true, false, false, false, false, false, false, false]}}
   """
   @spec call(
           GenServer.server(),
@@ -80,15 +80,15 @@ defmodule Modbuzz.TCP.Client do
   {:modbuzz, unit_id, request, response}
   ```
 
-  The response type is the same as `Modbuzz.PDU.decode/2` of request or `{:error, reason :: term()}`.
+  The response type is `{:ok, %Res{} | %Err{}}` or `{:error, reason :: term()}`.
 
   ## Examples
 
-      iex> alias Modbuzz.PDU.{WriteSingleCoil, ReadCoils}
-      [Modbuzz.PDU.WriteSingleCoil, Modbuzz.PDU.ReadCoils]
-      iex> Modbuzz.TCP.Client.cast(%WriteSingleCoil{output_address: 0 , output_value: true})
+      iex> alias Modbuzz.PDU.{WriteSingleCoil.Req, ReadCoils.Req}
+      [Modbuzz.PDU.WriteSingleCoil.Req, Modbuzz.PDU.ReadCoils.Req]
+      iex> Modbuzz.TCP.Client.cast(%WriteSingleCoil.Req{output_address: 0 , output_value: true})
       :ok
-      iex> Modbuzz.TCP.Client.cast(%ReadCoils{starting_address: 0 , quantity_of_coils: 1})
+      iex> Modbuzz.TCP.Client.cast(%ReadCoils.Req{starting_address: 0 , quantity_of_coils: 1})
       :ok
   """
   @spec cast(

@@ -8,6 +8,7 @@ defmodule Modbuzz.PDU2 do
         {ReadCoils, 0x01},
         {ReadDiscreteInputs, 0x02},
         {ReadHoldingRegisters, 0x03},
+        {ReadInputRegisters, 0x04},
         {WriteSingleCoil, 0x05}
       ] do
     req_module = Module.concat([Modbuzz.PDU2, modbus_function, Req])

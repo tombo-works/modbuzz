@@ -19,15 +19,15 @@ defmodule Modbuzz.PDU2 do
     err_module = Module.concat([Modbuzz.PDU2, modbus_function, Err])
     modbus_error_code = modbus_function_code + 0x80
 
-    def decode_request(binary = <<unquote(modbus_function_code), _rest::binary>>) do
+    def decode_request(<<unquote(modbus_function_code), _rest::binary>> = binary) do
       Modbuzz.PDU2.Protocol.decode(%unquote(req_module){}, binary)
     end
 
-    def decode_response(binary = <<unquote(modbus_function_code), _rest::binary>>) do
+    def decode_response(<<unquote(modbus_function_code), _rest::binary>> = binary) do
       Modbuzz.PDU2.Protocol.decode(%unquote(res_module){}, binary)
     end
 
-    def decode_response(binary = <<unquote(modbus_error_code), _rest::binary>>) do
+    def decode_response(<<unquote(modbus_error_code), _rest::binary>> = binary) do
       Modbuzz.PDU2.Protocol.decode(%unquote(err_module){}, binary)
     end
   end

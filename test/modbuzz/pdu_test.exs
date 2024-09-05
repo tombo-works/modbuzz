@@ -1,12 +1,17 @@
 defmodule Modbuzz.PDUTest do
   use ExUnit.Case
 
-  doctest Modbuzz.PDU.Modbuzz.PDU.ReadCoils
-  doctest Modbuzz.PDU.Modbuzz.PDU.ReadDiscreteInputs
-  doctest Modbuzz.PDU.Modbuzz.PDU.ReadHoldingRegisters
-  doctest Modbuzz.PDU.Modbuzz.PDU.ReadInputRegisters
-  doctest Modbuzz.PDU.Modbuzz.PDU.WriteSingleCoil
-  doctest Modbuzz.PDU.Modbuzz.PDU.WriteSingleRegister
-  doctest Modbuzz.PDU.Modbuzz.PDU.WriteMultipleCoils
-  doctest Modbuzz.PDU.Modbuzz.PDU.WriteMultipleRegisters
+  for type <- [Req, Res, Err],
+      modbus_function <- [
+        ReadCoils,
+        ReadDiscreteInputs,
+        ReadHoldingRegisters,
+        ReadInputRegisters,
+        WriteSingleCoil,
+        WriteSingleRegister,
+        WriteMultipleCoils,
+        WriteMultipleRegisters
+      ] do
+    doctest Module.concat([Modbuzz.PDU.Protocol.Modbuzz.PDU, modbus_function, type])
+  end
 end

@@ -49,7 +49,7 @@ defmodule Modbuzz.MixProject do
     [
       summary: [threshold: 80],
       ignore_modules: [
-        ~r/^Modbuzz\.PDU\.[a-zA-Z0-9]+$/,
+        ~r/^Modbuzz\.PDU\.[a-zA-Z0-9]+\.(Req|Res|Err)$/,
         Modbuzz.TCP.Client.Transaction
       ]
     ]
@@ -69,7 +69,9 @@ defmodule Modbuzz.MixProject do
       docs: [
         main: "readme",
         extras: ["README.md"],
-        nest_modules_by_prefix: [Modbuzz.PDU]
+        nest_modules_by_prefix: [
+          Modbuzz.PDU
+        ]
       ]
     ]
   end

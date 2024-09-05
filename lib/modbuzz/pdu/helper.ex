@@ -4,9 +4,17 @@ defmodule Modbuzz.PDU.Helper do
   import Bitwise
 
   def module_one_line_doc(module) when is_atom(module) do
-    type = module |> Module.split() |> List.last()
-    "`Modbuzz.PDU` implementation for #{type}."
+    ["Modbuzz", "PDU", modbus_function, type] = Module.split(module)
+    "#{type} struct for #{modbus_function}."
   end
+
+  @spec to_boolean(0xFF00 | 0x0000) :: boolean()
+  def to_boolean(0xFF00), do: true
+  def to_boolean(0x0000), do: false
+
+  @spec to_integer(boolean()) :: 0xFF00 | 0x0000
+  def to_integer(true), do: 0xFF00
+  def to_integer(false), do: 0x0000
 
   @spec to_booleans(binary()) :: [] | [boolean()]
   def to_booleans(binary) when is_binary(binary) do

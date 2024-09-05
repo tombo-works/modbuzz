@@ -12,9 +12,8 @@ defmodule Modbuzz.TCP.Client do
     defstruct [:unit_id, :request, :from_pid, :sent_time]
   end
 
+  alias Modbuzz.TCP.ADU
   alias Modbuzz.PDU
-
-  @unit_id_byte_size 1
 
   @doc """
   Starts a #{__MODULE__} GenServer process linked to the current process.
@@ -45,18 +44,23 @@ defmodule Modbuzz.TCP.Client do
   Makes a synchronous call to the server and waits for a response.
   Only available when active: false.
 
-  The response type is the same as `Modbuzz.PDU.decode/2` of request or `{:error, reason :: term()}`.
+  The response type is `{:ok, %Res{}}` or `{:error, %Err{} | reason :: term()}`.
 
   ## Examples
 
       iex> alias Modbuzz.PDU.{WriteSingleCoil, ReadCoils}
       [Modbuzz.PDU.WriteSingleCoil, Modbuzz.PDU.ReadCoils]
-      iex> Modbuzz.TCP.Client.call(%WriteSingleCoil{output_address: 0 , output_value: true})
-      {:ok, nil}
-      iex> Modbuzz.TCP.Client.call(%ReadCoils{starting_address: 0 , quantity_of_coils: 1})
-      {:ok, [true]}
+      iex> Modbuzz.TCP.Client.call(%WriteSingleCoil.Req{output_address: 0 , output_value: true})
+      {:ok, %WriteSingleCoil.Res{output_address: 0 , output_value: true}}
+      iex> Modbuzz.TCP.Client.call(%ReadCoils.Req{starting_address: 0 , quantity_of_coils: 1})
+      {:ok, %ReadCoils.Res{byte_count: 1, [true, false, false, false, false, false, false, false]}}
   """
-  @spec call(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t(), timeout()) ::
+  @spec call(
+          GenServer.server(),
+          unit_id :: 0x00..0xFF,
+          request :: Modbuzz.PDU.Protocol.t(),
+          timeout()
+        ) ::
           {:ok, response :: term()} | {:error, reason :: term()}
   def call(name \\ __MODULE__, unit_id \\ 0, request, timeout \\ 5000)
       when unit_id in 0x00..0xFF and is_struct(request) and is_integer(timeout) do
@@ -76,18 +80,23 @@ defmodule Modbuzz.TCP.Client do
   {:modbuzz, unit_id, request, response}
   ```
 
-  The response type is the same as `Modbuzz.PDU.decode/2` of request or `{:error, reason :: term()}`.
+  The response type is `{:ok, %Res{}}` or `{:error, %Err{} | reason :: term()}`.
 
   ## Examples
 
-      iex> alias Modbuzz.PDU.{WriteSingleCoil, ReadCoils}
-      [Modbuzz.PDU.WriteSingleCoil, Modbuzz.PDU.ReadCoils]
-      iex> Modbuzz.TCP.Client.cast(%WriteSingleCoil{output_address: 0 , output_value: true})
+      iex> alias Modbuzz.PDU.{WriteSingleCoil.Req, ReadCoils.Req}
+      [Modbuzz.PDU.WriteSingleCoil.Req, Modbuzz.PDU.ReadCoils.Req]
+      iex> Modbuzz.TCP.Client.cast(%WriteSingleCoil.Req{output_address: 0 , output_value: true})
       :ok
-      iex> Modbuzz.TCP.Client.cast(%ReadCoils{starting_address: 0 , quantity_of_coils: 1})
+      iex> Modbuzz.TCP.Client.cast(%ReadCoils.Req{starting_address: 0 , quantity_of_coils: 1})
       :ok
   """
-  @spec cast(GenServer.server(), unit_id :: 0x00..0xFF, request :: Modbuzz.PDU.t(), pid()) ::
+  @spec cast(
+          GenServer.server(),
+          unit_id :: 0x00..0xFF,
+          request :: Modbuzz.PDU.Protocol.t(),
+          pid()
+        ) ::
           :ok
   def cast(name \\ __MODULE__, unit_id \\ 0, request, from_pid \\ self())
       when unit_id in 0x00..0xFF and is_struct(request) and is_pid(from_pid) do
@@ -130,15 +139,20 @@ defmodule Modbuzz.TCP.Client do
   def handle_continue({:recall, unit_id, request, timeout, from}, %{socket: nil} = state) do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
-    transaction_id = increment_transaction_id(transaction_id)
-    adu = adu(unit_id, request, transaction_id)
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+
     state = %{state | transaction_id: transaction_id}
 
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
          {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
-      GenServer.reply(from, decoded_pdu)
+      [res_tuple] =
+        for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
+          PDU.decode_response(pdu)
+        end
+
+      GenServer.reply(from, res_tuple)
       {:noreply, %{state | socket: socket}}
     else
       {:connect, {:error, reason} = error} ->
@@ -166,8 +180,9 @@ defmodule Modbuzz.TCP.Client do
       transactions: transactions
     } = state
 
-    transaction_id = increment_transaction_id(transaction_id)
-    adu = adu(unit_id, request, transaction_id)
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+
     state = %{state | transaction_id: transaction_id}
 
     with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
@@ -196,14 +211,19 @@ defmodule Modbuzz.TCP.Client do
   def handle_call({:call, unit_id, request, timeout}, from, %{active: false} = state) do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
-    transaction_id = increment_transaction_id(transaction_id)
-    adu = adu(unit_id, request, transaction_id)
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+
     state = %{state | transaction_id: transaction_id}
 
     with {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [decoded_pdu] = for {^transaction_id, pdu} <- pdus(binary), do: PDU.decode(request, pdu)
-      {:reply, decoded_pdu, state}
+      [res_tuple] =
+        for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
+          PDU.decode_response(pdu)
+        end
+
+      {:reply, res_tuple, state}
     else
       {:send, {:error, reason}} ->
         Logger.warning(
@@ -238,8 +258,9 @@ defmodule Modbuzz.TCP.Client do
       transactions: transactions
     } = state
 
-    transaction_id = increment_transaction_id(transaction_id)
-    adu = adu(unit_id, request, transaction_id)
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+
     state = %{state | transaction_id: transaction_id}
 
     case transport.send(socket, adu) do
@@ -274,8 +295,10 @@ defmodule Modbuzz.TCP.Client do
     %{transactions: transactions} = state
 
     transactions =
-      Enum.reduce(pdus(binary), transactions, fn {transaction_id, pdu}, acc ->
+      ADU.decode(binary, [])
+      |> Enum.reduce(transactions, fn %ADU{transaction_id: transaction_id, pdu: pdu}, acc ->
         {transaction, acc} = Map.pop(acc, transaction_id)
+        res_tuple = PDU.decode_response(pdu)
 
         send(
           transaction.from_pid,
@@ -283,7 +306,7 @@ defmodule Modbuzz.TCP.Client do
             :modbuzz,
             transaction.unit_id,
             transaction.request,
-            PDU.decode(transaction.request, pdu)
+            res_tuple
           }
         )
 
@@ -323,29 +346,6 @@ defmodule Modbuzz.TCP.Client do
     {:noreply, %{state | socket: nil}, {:continue, :connect}}
   end
 
-  @doc false
-  def adu(unit_id, request, transaction_id) do
-    pdu = PDU.encode(request)
-    mbap_header = mbap_header(transaction_id, byte_size(pdu) + @unit_id_byte_size, unit_id)
-    <<mbap_header::binary, pdu::binary>>
-  end
-
-  @doc false
-  def mbap_header(transaction_id, length, unit_id) do
-    protocol_id = 0
-    <<transaction_id::16, protocol_id::16, length::16, unit_id::8>>
-  end
-
-  @doc false
-  def pdus(binary, acc \\ []) when is_binary(binary) do
-    <<transaction_id::16, _protocol_id::16, length::16, _unit_id::8,
-      pdu::binary-size(length - @unit_id_byte_size), rest::binary>> = binary
-
-    acc = [{transaction_id, pdu} | acc]
-
-    if rest == <<>>, do: Enum.reverse(acc), else: pdus(rest, acc)
-  end
-
   defp gen_tcp_connect(state) do
     %{transport: transport, address: address, port: port, active: active} = state
 
@@ -355,9 +355,5 @@ defmodule Modbuzz.TCP.Client do
       [mode: :binary, packet: :raw, active: active],
       _timeout = 3000
     )
-  end
-
-  defp increment_transaction_id(transaction_id) do
-    if transaction_id == 0xFFFF, do: 0, else: transaction_id + 1
   end
 end

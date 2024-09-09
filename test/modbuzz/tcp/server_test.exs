@@ -7,7 +7,7 @@ defmodule Modbuzz.TCP.ServerTest do
   setup do
     start_supervised!(
       {Modbuzz.TCP.Server.Supervisor,
-       modbuzz_tcp_server_args: [
+       [
          address: @test_address,
          port: @test_port,
          active: false

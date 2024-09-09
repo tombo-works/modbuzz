@@ -59,21 +59,16 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
   end
 
   defp get_from_data_store(name, request) do
+    get =
+      &case Agent.get(&1, fn map -> Map.get(map, request) end) do
+        nil -> error(request)
+        response -> response
+      end
+
     case GenServer.whereis(name) do
-      pid when is_pid(pid) ->
-        case Agent.get(pid, fn map -> Map.get(map, request) end) do
-          nil -> error(request)
-          response -> response
-        end
-
-      {atom, node} ->
-        case Agent.get({atom, node}, fn map -> Map.get(map, request) end) do
-          nil -> error(request)
-          response -> response
-        end
-
-      nil ->
-        error(request)
+      pid when is_pid(pid) -> get.(pid)
+      {atom, node} -> get.({atom, node})
+      nil -> error(request)
     end
   end
 

@@ -1,4 +1,6 @@
 defmodule Modbuzz.TCP.Server.DataStore do
+  @moduledoc false
+
   use Agent
 
   def name(address, port, unit_id) do

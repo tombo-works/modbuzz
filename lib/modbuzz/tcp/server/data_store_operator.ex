@@ -1,4 +1,6 @@
 defmodule Modbuzz.TCP.Server.DataStoreOperator do
+  @moduledoc false
+
   use GenServer
 
   def name(address, port) do

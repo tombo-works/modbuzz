@@ -7,18 +7,42 @@ defmodule Modbuzz.TCP.Server do
 
   require Logger
 
+  @doc """
+  This function handles the upsert (insert or update) of a response in the server, based on the provided request.
+  If a matching response for the request already exists, it will be updated;
+  otherwise, a new response entry will be inserted.
+  """
+  @spec upsert(
+          address :: :inet.socket_address(),
+          port :: :inet.port_number(),
+          unit_id :: non_neg_integer(),
+          request :: struct(),
+          response :: struct()
+        ) :: :ok
   defdelegate upsert(address, port, unit_id \\ 0, request, response),
     to: Modbuzz.TCP.Server.DataStoreOperator
 
+  @doc """
+  This function handles the delete of a response in the server, based on the provided request.
+  If a matching response for the request already exists, it will be deleted.
+  """
+  @spec delete(
+          address :: :inet.socket_address(),
+          port :: :inet.port_number(),
+          unit_id :: non_neg_integer(),
+          request :: struct()
+        ) :: :ok
   defdelegate delete(address, port, unit_id \\ 0, request),
     to: Modbuzz.TCP.Server.DataStoreOperator
 
+  @doc false
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(args) when is_list(args) do
     name = Keyword.get(args, :name, __MODULE__)
     GenServer.start_link(__MODULE__, args, name: name)
   end
 
+  @doc false
   def init(args) do
     transport = Keyword.get(args, :transport, :gen_tcp)
     address = Keyword.get(args, :address, {0, 0, 0, 0})
@@ -35,6 +59,7 @@ defmodule Modbuzz.TCP.Server do
      }, {:continue, :listen}}
   end
 
+  @doc false
   def handle_continue(:listen, state) do
     case gen_tcp_listen(state) do
       {:ok, socket} ->

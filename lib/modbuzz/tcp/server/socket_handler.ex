@@ -1,4 +1,6 @@
 defmodule Modbuzz.TCP.Server.SocketHandler do
+  @moduledoc false
+
   use GenServer, restart: :temporary
 
   require Logger

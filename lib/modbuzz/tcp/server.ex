@@ -36,22 +36,37 @@ defmodule Modbuzz.TCP.Server do
     to: Modbuzz.TCP.Server.DataStoreOperator
 
   @doc false
+  @spec hostname() :: String.t()
+  def hostname() do
+    :inet.gethostname() |> then(fn {:ok, hostname} -> "#{hostname}" end)
+  end
+
+  @doc false
+  def name(host, address, port) do
+    {:global, {__MODULE__, host, address, port}}
+  end
+
+  @doc false
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(args) when is_list(args) do
-    name = Keyword.get(args, :name, __MODULE__)
-    GenServer.start_link(__MODULE__, args, name: name)
+    host = Keyword.fetch!(args, :host)
+    address = Keyword.fetch!(args, :address)
+    port = Keyword.fetch!(args, :port)
+    GenServer.start_link(__MODULE__, args, name: name(host, address, port))
   end
 
   @doc false
   def init(args) do
     transport = Keyword.get(args, :transport, :gen_tcp)
-    address = Keyword.get(args, :address, {0, 0, 0, 0})
-    port = Keyword.get(args, :port, 502)
+    host = Keyword.fetch!(args, :host)
+    address = Keyword.fetch!(args, :address)
+    port = Keyword.fetch!(args, :port)
     active = Keyword.get(args, :active, false)
 
     {:ok,
      %{
        transport: transport,
+       host: host,
        address: address,
        port: port,
        active: active,
@@ -75,16 +90,19 @@ defmodule Modbuzz.TCP.Server do
     %{
       transport: transport,
       listen_socket: listen_socket,
+      host: host,
       address: address,
       port: port
     } = state
 
     case transport.accept(listen_socket) do
       {:ok, socket} ->
-        DynamicSupervisor.start_child(
-          Modbuzz.TCP.Server.SocketHandlerSupervisor,
-          {Modbuzz.TCP.Server.SocketHandler,
-           [transport: transport, socket: socket, address: address, port: port]}
+        Modbuzz.TCP.Server.SocketHandlerSupervisor.start_socket_handler(
+          transport,
+          socket,
+          host,
+          address,
+          port
         )
 
       {:error, reason} ->

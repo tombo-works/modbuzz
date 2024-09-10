@@ -14,6 +14,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
   def init(args) do
     transport = Keyword.fetch!(args, :transport)
     socket = Keyword.fetch!(args, :socket)
+    host = Keyword.fetch!(args, :host)
     address = Keyword.fetch!(args, :address)
     port = Keyword.fetch!(args, :port)
     timeout = Keyword.get(args, :timeout, 5000)
@@ -23,6 +24,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
        transport: transport,
        socket: socket,
        timeout: timeout,
+       host: host,
        address: address,
        port: port
      }, {:continue, :recv}}
@@ -33,6 +35,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
       transport: transport,
       socket: socket,
       timeout: timeout,
+      host: host,
       address: address,
       port: port
     } = state
@@ -42,7 +45,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
         for adu <- Modbuzz.TCP.ADU.decode(binary, []) do
           {:ok, request} = Modbuzz.PDU.decode_request(adu.pdu)
 
-          Modbuzz.TCP.Server.DataStore.name(address, port, adu.unit_id)
+          Modbuzz.TCP.Server.DataStore.name(host, address, port, adu.unit_id)
           |> get_from_data_store(request)
           |> Modbuzz.PDU.encode_response!()
           |> Modbuzz.TCP.ADU.new(adu.transaction_id, adu.unit_id)

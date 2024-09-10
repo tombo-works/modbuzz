@@ -3,8 +3,9 @@ defmodule Modbuzz.TCP.Server.DataStore do
 
   use Agent
 
-  def name(address, port, unit_id) do
-    {:via, Registry, {Modbuzz.TCP.Server.Registry, {address, port, unit_id}}}
+  @doc false
+  def name(host, address, port, unit_id) do
+    {:global, {__MODULE__, host, address, port, unit_id}}
   end
 
   def start_link(args) do

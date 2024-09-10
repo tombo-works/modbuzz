@@ -4,14 +4,19 @@ defmodule Modbuzz.TCP.Server.DataStoreOperator do
   use GenServer
 
   def name(address, port) do
-    {:via, Registry, {Modbuzz.TCP.Server.Registry, {address, port, :data_store_operator}}}
+    host = Modbuzz.TCP.Server.hostname()
+    name(host, address, port)
+  end
+
+  def name(host, address, port) do
+    {:global, {__MODULE__, host, address, port}}
   end
 
   def start_link(args) do
+    host = Keyword.fetch!(args, :host)
     address = Keyword.fetch!(args, :address)
     port = Keyword.fetch!(args, :port)
-    name = name(address, port)
-    GenServer.start_link(__MODULE__, args, name: name)
+    GenServer.start_link(__MODULE__, args, name: name(host, address, port))
   end
 
   def upsert(address, port, unit_id \\ 0, request, response) do
@@ -25,19 +30,21 @@ defmodule Modbuzz.TCP.Server.DataStoreOperator do
   end
 
   def init(args) do
+    host = Keyword.fetch!(args, :host)
     address = Keyword.fetch!(args, :address)
     port = Keyword.fetch!(args, :port)
 
     {:ok,
      %{
+       host: host,
        address: address,
        port: port
      }}
   end
 
   def handle_call({:upsert, unit_id, request, response}, _from, state) do
-    %{address: address, port: port} = state
-    name = Modbuzz.TCP.Server.DataStore.name(address, port, unit_id)
+    %{host: host, address: address, port: port} = state
+    name = Modbuzz.TCP.Server.DataStore.name(host, address, port, unit_id)
 
     case GenServer.whereis(name) do
       pid when is_pid(pid) ->
@@ -47,18 +54,17 @@ defmodule Modbuzz.TCP.Server.DataStoreOperator do
         Agent.update({atom, node}, fn map -> Map.put(map, request, response) end)
 
       nil ->
-        DynamicSupervisor.start_child(
-          Modbuzz.TCP.Server.DataStoreSupervisor,
-          {Modbuzz.TCP.Server.DataStore, name: name, state: %{request => response}}
-        )
+        Modbuzz.TCP.Server.DataStoreSupervisor.start_data_store(host, address, port, unit_id, %{
+          request => response
+        })
     end
 
     {:reply, :ok, state}
   end
 
   def handle_call({:delete, unit_id, request}, _from, state) do
-    %{address: address, port: port} = state
-    name = Modbuzz.TCP.Server.DataStore.name(address, port, unit_id)
+    %{host: host, address: address, port: port} = state
+    name = Modbuzz.TCP.Server.DataStore.name(host, address, port, unit_id)
 
     case GenServer.whereis(name) do
       pid when is_pid(pid) ->
@@ -68,10 +74,7 @@ defmodule Modbuzz.TCP.Server.DataStoreOperator do
         Agent.update({atom, node}, fn map -> Map.delete(map, request) end)
 
       nil ->
-        DynamicSupervisor.start_child(
-          Modbuzz.TCP.Server.DataStoreSupervisor,
-          {Modbuzz.TCP.Server.DataStore, name: name, state: %{}}
-        )
+        Modbuzz.TCP.Server.DataStoreSupervisor.start_data_store(host, address, port, unit_id, %{})
     end
 
     {:reply, :ok, state}

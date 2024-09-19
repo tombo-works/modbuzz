@@ -108,7 +108,7 @@ defmodule Modbuzz.TCP.Client do
     transport = Keyword.get(args, :transport, :gen_tcp)
     address = Keyword.get(args, :address, {192, 168, 5, 57})
     port = Keyword.get(args, :port, 502)
-    active = Keyword.get(args, :active, true)
+    active = Keyword.get(args, :active, false)
 
     state = %{
       transport: transport,

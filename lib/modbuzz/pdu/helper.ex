@@ -31,6 +31,11 @@ defmodule Modbuzz.PDU.Helper do
     [register | to_registers(rest)]
   end
 
+  @spec to_binary([]) :: binary()
+  def to_binary([] = list) when is_list(list) do
+    <<>>
+  end
+
   @spec to_binary([boolean()]) :: binary()
   def to_binary([h | _t] = list) when is_list(list) and is_boolean(h) do
     list

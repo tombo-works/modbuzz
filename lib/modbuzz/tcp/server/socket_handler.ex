@@ -5,8 +5,6 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
 
   require Logger
 
-  @illegal_data_address 0x02
-
   def start_link(args) do
     GenServer.start_link(__MODULE__, args)
   end
@@ -14,19 +12,15 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
   def init(args) do
     transport = Keyword.fetch!(args, :transport)
     socket = Keyword.fetch!(args, :socket)
-    host = Keyword.fetch!(args, :host)
-    address = Keyword.fetch!(args, :address)
-    port = Keyword.fetch!(args, :port)
+    data_source = Keyword.fetch!(args, :data_source)
     timeout = Keyword.get(args, :timeout, 5000)
 
     {:ok,
      %{
        transport: transport,
        socket: socket,
-       timeout: timeout,
-       host: host,
-       address: address,
-       port: port
+       data_source: data_source,
+       timeout: timeout
      }, {:continue, :recv}}
   end
 
@@ -34,10 +28,8 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
     %{
       transport: transport,
       socket: socket,
-      timeout: timeout,
-      host: host,
-      address: address,
-      port: port
+      data_source: data_source,
+      timeout: timeout
     } = state
 
     case transport.recv(socket, _length = 0, timeout) do
@@ -45,8 +37,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
         for adu <- Modbuzz.TCP.ADU.decode(binary, []) do
           {:ok, request} = Modbuzz.PDU.decode_request(adu.pdu)
 
-          Modbuzz.TCP.Server.DataStore.name(host, address, port, adu.unit_id)
-          |> get_from_data_store(request)
+          request(data_source, adu.unit_id, request, timeout)
           |> Modbuzz.PDU.encode_response!()
           |> Modbuzz.TCP.ADU.new(adu.transaction_id, adu.unit_id)
           |> Modbuzz.TCP.ADU.encode()
@@ -63,24 +54,16 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
     end
   end
 
-  defp get_from_data_store(name, request) do
-    get =
-      &case Agent.get(&1, fn map -> Map.get(map, request) end) do
-        nil -> error(request)
-        response -> response
+  defp request(data_source, unit_id, request, timeout) do
+    try do
+      case GenServer.call(data_source, {:call, unit_id, request, timeout}) do
+        {:ok, response} -> response
+        {:error, error} -> error
       end
-
-    case GenServer.whereis(name) do
-      pid when is_pid(pid) -> get.(pid)
-      {atom, node} -> get.({atom, node})
-      nil -> error(request)
+    catch
+      :exit, {:noproc, mfa} ->
+        Logger.error("#{__MODULE__}: `#{data_source}` not found. (mfa is #{inspect(mfa)})")
+        Modbuzz.PDU.to_error(request)
     end
-  end
-
-  defp error(%req{}, exception_code \\ @illegal_data_address) do
-    Module.split(req)
-    |> List.replace_at(-1, "Err")
-    |> Module.concat()
-    |> struct(%{exception_code: exception_code})
   end
 end

@@ -1,6 +1,8 @@
 defmodule Modbuzz.PDU do
   @moduledoc false
 
+  @illegal_data_address 0x02
+
   defdelegate encode_request!(struct), to: Modbuzz.PDU.Protocol, as: :encode
   defdelegate encode_response!(struct), to: Modbuzz.PDU.Protocol, as: :encode
 
@@ -33,5 +35,12 @@ defmodule Modbuzz.PDU do
     def decode_response(<<unquote(modbus_error_code), _rest::binary>> = binary) do
       {:error, Modbuzz.PDU.Protocol.decode(%unquote(err_module){}, binary)}
     end
+  end
+
+  def to_error(%req{}, exception_code \\ @illegal_data_address) do
+    Module.split(req)
+    |> List.replace_at(-1, "Err")
+    |> Module.concat()
+    |> struct(%{exception_code: exception_code})
   end
 end

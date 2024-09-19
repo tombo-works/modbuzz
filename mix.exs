@@ -20,7 +20,12 @@ defmodule Modbuzz.MixProject do
   def application do
     [
       mod: {Modbuzz.Application, []},
-      extra_applications: [:logger]
+      extra_applications:
+        [:logger] ++
+          case Mix.target() do
+            :host -> [:runtime_tools, :wx, :observer]
+            _ -> []
+          end
     ]
   end
 

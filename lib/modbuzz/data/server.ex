@@ -35,20 +35,24 @@ defmodule Modbuzz.Data.Server do
   def handle_call({:call, unit_id, request, _timeout}, _from, state) do
     unit_name = Modbuzz.Data.Unit.name(state.name, unit_id)
 
-    return =
+    response =
       case GenServer.whereis(unit_name) do
         pid when is_pid(pid) ->
-          response = Modbuzz.Data.Unit.get(pid, request)
-          {:ok, response}
+          Modbuzz.Data.Unit.get(pid, request)
 
         {atom, node} ->
-          response = Modbuzz.Data.Unit.get({atom, node}, request)
-          {:ok, response}
+          Modbuzz.Data.Unit.get({atom, node}, request)
 
         nil ->
           initial_data = %{}
           Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
-          {:error, Modbuzz.PDU.to_error(request)}
+          nil
+      end
+
+    return =
+      case response do
+        response when is_struct(response) -> {:ok, response}
+        nil -> {:error, Modbuzz.PDU.to_error(request)}
       end
 
     {:reply, return, state}
@@ -59,14 +63,14 @@ defmodule Modbuzz.Data.Server do
 
     case GenServer.whereis(unit_name) do
       pid when is_pid(pid) ->
-        Modbuzz.Data.Unit.upsert(pid, request, response)
+        :ok = Modbuzz.Data.Unit.upsert(pid, request, response)
 
       {atom, node} ->
-        Modbuzz.Data.Unit.upsert({atom, node}, request, response)
+        :ok = Modbuzz.Data.Unit.upsert({atom, node}, request, response)
 
       nil ->
         initial_data = %{request => response}
-        Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
+        {:ok, _pid} = Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
     end
 
     {:reply, :ok, state}
@@ -77,14 +81,14 @@ defmodule Modbuzz.Data.Server do
 
     case GenServer.whereis(unit_name) do
       pid when is_pid(pid) ->
-        Modbuzz.Data.Unit.delete(pid, request)
+        :ok = Modbuzz.Data.Unit.delete(pid, request)
 
       {atom, node} ->
-        Modbuzz.Data.Unit.delete({atom, node}, request)
+        :ok = Modbuzz.Data.Unit.delete({atom, node}, request)
 
       nil ->
         initial_data = %{}
-        Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
+        {:ok, _pid} = Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
     end
 
     {:reply, :ok, state}
@@ -103,7 +107,8 @@ defmodule Modbuzz.Data.Server do
 
         nil ->
           initial_data = %{}
-          Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
+          {:ok, pid} = Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
+          Modbuzz.Data.Unit.dump(pid)
       end
 
     {:reply, data, state}

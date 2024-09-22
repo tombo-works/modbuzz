@@ -8,7 +8,7 @@ defmodule Modbuzz do
   @type error :: Modbuzz.PDU.Protocol.t()
   @type client :: GenServer.name()
   @type server :: GenServer.name()
-  @type unit_id :: byte()
+  @type unit_id :: 0..247
 
   @spec request(name :: client(), unit_id(), request()) ::
           {:ok, response()} | {:error, error() | term()}

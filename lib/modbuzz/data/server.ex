@@ -49,13 +49,13 @@ defmodule Modbuzz.Data.Server do
           nil
       end
 
-    return =
+    res_tuple =
       case response do
         response when is_struct(response) -> {:ok, response}
         nil -> {:error, Modbuzz.PDU.to_error(request)}
       end
 
-    {:reply, return, state}
+    {:reply, res_tuple, state}
   end
 
   def handle_call({:upsert, unit_id, request, response}, _from, state) do

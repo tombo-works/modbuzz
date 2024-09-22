@@ -16,14 +16,24 @@ defmodule Modbuzz do
     GenServer.call(name, {:call, unit_id, request, timeout})
   end
 
+  defdelegate upsert(name, unit_id \\ 0, request, response), to: Modbuzz.Data.Server
+  defdelegate delete(name, unit_id \\ 0, request), to: Modbuzz.Data.Server
+  defdelegate dump(name, unit_id \\ 0), to: Modbuzz.Data.Server
+
   @spec start_data_server(name :: server()) :: :ok
   def start_data_server(name) do
     case DynamicSupervisor.start_child(
            Modbuzz.Application.data_server_supervisor_name(),
            {Modbuzz.Data.ServerSupervisor, [name: name]}
          ) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> {:error, :already_started}
+      {:ok, _pid} ->
+        :ok
+
+      {:error, {:shutdown, {:failed_to_start_child, _, {:already_started, _pid}}}} ->
+        {:error, :already_started}
+
+      {:error, {:already_started, _pid}} ->
+        {:error, :already_started}
     end
   end
 
@@ -54,8 +64,14 @@ defmodule Modbuzz do
            {Modbuzz.TCP.ServerSupervisor,
             [name: name, address: address, port: port, data_source: data_source]}
          ) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> {:error, :already_started}
+      {:ok, _pid} ->
+        :ok
+
+      {:error, {:shutdown, {:failed_to_start_child, _, {:already_started, _pid}}}} ->
+        {:error, :already_started}
+
+      {:error, {:already_started, _pid}} ->
+        {:error, :already_started}
     end
   end
 

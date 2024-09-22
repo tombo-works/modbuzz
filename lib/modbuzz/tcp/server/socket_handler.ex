@@ -47,6 +47,10 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
 
         {:noreply, state, {:continue, :recv}}
 
+      {:error, :closed = reason} ->
+        :ok = transport.close(socket)
+        {:stop, reason, state}
+
       {:error, reason} ->
         Logger.error("#{__MODULE__}: #{inspect(reason)}")
         :ok = transport.close(socket)

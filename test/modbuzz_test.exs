@@ -144,4 +144,26 @@ defmodule ModbuzzTest do
       assert Modbuzz.dump(:data_server) == %{request => response}
     end
   end
+
+  describe "gateway" do
+    test "TCP/TCP" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
+
+      :ok = Modbuzz.start_data_server(:data_server_1)
+      :ok = Modbuzz.start_tcp_server(:server_1, @test_address, @test_port_1, :data_server_1)
+      :ok = Modbuzz.start_tcp_client(:client_1, @test_address, @test_port_1)
+
+      :ok = Modbuzz.start_tcp_server(:server_2, @test_address, @test_port_2, :client_1)
+      :ok = Modbuzz.start_tcp_client(:client_2, @test_address, @test_port_2)
+
+      {:error, %Modbuzz.PDU.ReadDiscreteInputs.Err{}} = Modbuzz.request(:client_1, 0, request)
+      {:error, %Modbuzz.PDU.ReadDiscreteInputs.Err{}} = Modbuzz.request(:client_2, 0, request)
+
+      Modbuzz.upsert(:data_server_1, request, response)
+
+      {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} = Modbuzz.request(:client_1, 0, request)
+      {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} = Modbuzz.request(:client_2, 0, request)
+    end
+  end
 end

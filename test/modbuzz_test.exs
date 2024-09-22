@@ -72,6 +72,9 @@ defmodule ModbuzzTest do
 
       assert {:error, %Modbuzz.PDU.ReadDiscreteInputs.Err{}} =
                Modbuzz.request(:client_1, 0, request)
+
+      assert {:error, %Modbuzz.PDU.ReadDiscreteInputs.Err{}} =
+               Modbuzz.request(:data_server_1, 0, request)
     end
 
     test "return ok tuple" do
@@ -81,6 +84,9 @@ defmodule ModbuzzTest do
       :ok = Modbuzz.upsert(:data_server_1, request, response)
 
       assert {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} = Modbuzz.request(:client_1, 0, request)
+
+      assert {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} =
+               Modbuzz.request(:data_server_1, 0, request)
     end
 
     test "multiple instance" do

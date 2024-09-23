@@ -14,6 +14,10 @@ defmodule Modbuzz.Data.ServerSupervisor do
 
     children = [
       {
+        PartitionSupervisor,
+        child_spec: Task.Supervisor, name: Modbuzz.Data.CallbackSupervisor.name(server_name)
+      },
+      {
         DynamicSupervisor,
         name: Modbuzz.Data.UnitSupervisor.name(server_name), strategy: :one_for_one
       },

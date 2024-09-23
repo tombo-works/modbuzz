@@ -1,5 +1,7 @@
 defmodule Modbuzz.TCP.TransportBehaviour do
-  @moduledoc """
+  @moduledoc false
+
+  _ = """
   This behaviour provides the exact same interface as :gen_tcp.
 
   We use `identifier()` as socket type for unit tests.

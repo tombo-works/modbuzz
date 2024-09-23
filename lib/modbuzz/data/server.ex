@@ -5,9 +5,14 @@ defmodule Modbuzz.Data.Server do
 
   import Modbuzz, only: [is_unit_id: 1]
 
-  @spec upsert(GenServer.name(), Modbuzz.unit_id(), Modbuzz.request(), Modbuzz.response()) :: :ok
-  def upsert(name, unit_id \\ 0, request, response) when is_unit_id(unit_id) do
-    GenServer.call(name, {:upsert, unit_id, request, response})
+  @spec upsert(
+          GenServer.name(),
+          Modbuzz.unit_id(),
+          Modbuzz.request(),
+          Modbuzz.response() | Modbuzz.callback()
+        ) :: :ok
+  def upsert(name, unit_id \\ 0, request, res_or_cb) when is_unit_id(unit_id) do
+    GenServer.call(name, {:upsert, unit_id, request, res_or_cb})
   end
 
   @spec delete(GenServer.name(), Modbuzz.unit_id(), Modbuzz.request()) :: :ok
@@ -32,10 +37,12 @@ defmodule Modbuzz.Data.Server do
     {:ok, %{name: name}}
   end
 
-  def handle_call({:call, unit_id, request, _timeout}, _from, state) do
-    unit_name = Modbuzz.Data.Unit.name(state.name, unit_id)
+  def handle_call({:call, unit_id, request, _timeout}, from, state) do
+    %{name: name} = state
 
-    response =
+    unit_name = Modbuzz.Data.Unit.name(name, unit_id)
+
+    res_or_cb =
       case GenServer.whereis(unit_name) do
         pid when is_pid(pid) ->
           Modbuzz.Data.Unit.get(pid, request)
@@ -45,31 +52,39 @@ defmodule Modbuzz.Data.Server do
 
         nil ->
           initial_data = %{}
-          Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
+          Modbuzz.Data.UnitSupervisor.start_unit(name, unit_id, initial_data)
           nil
       end
 
-    res_tuple =
-      case response do
-        response when is_struct(response) -> {:ok, response}
-        nil -> {:error, Modbuzz.PDU.to_error(request)}
-      end
+    case res_or_cb do
+      response when is_struct(response) ->
+        {:reply, {:ok, response}, state}
 
-    {:reply, res_tuple, state}
+      nil ->
+        {:reply, {:error, Modbuzz.PDU.to_error(request)}, state}
+
+      callback when is_function(callback) ->
+        Task.Supervisor.start_child(
+          {:via, PartitionSupervisor, {Modbuzz.Data.CallbackSupervisor.name(name), self()}},
+          fn -> GenServer.reply(from, {:ok, callback.(request)}) end
+        )
+
+        {:noreply, state}
+    end
   end
 
-  def handle_call({:upsert, unit_id, request, response}, _from, state) do
+  def handle_call({:upsert, unit_id, request, res_or_cb}, _from, state) do
     unit_name = Modbuzz.Data.Unit.name(state.name, unit_id)
 
     case GenServer.whereis(unit_name) do
       pid when is_pid(pid) ->
-        :ok = Modbuzz.Data.Unit.upsert(pid, request, response)
+        :ok = Modbuzz.Data.Unit.upsert(pid, request, res_or_cb)
 
       {atom, node} ->
-        :ok = Modbuzz.Data.Unit.upsert({atom, node}, request, response)
+        :ok = Modbuzz.Data.Unit.upsert({atom, node}, request, res_or_cb)
 
       nil ->
-        initial_data = %{request => response}
+        initial_data = %{request => res_or_cb}
         {:ok, _pid} = Modbuzz.Data.UnitSupervisor.start_unit(state.name, unit_id, initial_data)
     end
 

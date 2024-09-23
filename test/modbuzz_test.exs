@@ -89,6 +89,18 @@ defmodule ModbuzzTest do
                Modbuzz.request(:data_server_1, 0, request)
     end
 
+    test "return ok tuple, callback returns response" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
+
+      :ok = Modbuzz.upsert(:data_server_1, request, fn _request -> response end)
+
+      assert {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} = Modbuzz.request(:client_1, 0, request)
+
+      assert {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} =
+               Modbuzz.request(:data_server_1, 0, request)
+    end
+
     test "multiple instance" do
       :ok = Modbuzz.start_data_server(:data_server_2)
       :ok = Modbuzz.start_tcp_server(:server_2, @test_address, @test_port_2, :data_server_2)
@@ -125,6 +137,7 @@ defmodule ModbuzzTest do
       response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
 
       assert :ok = Modbuzz.upsert(:data_server, request, response)
+      assert :ok = Modbuzz.upsert(:data_server, request, fn _request -> response end)
     end
 
     test "delete/3" do

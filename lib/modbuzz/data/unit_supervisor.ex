@@ -3,7 +3,6 @@ defmodule Modbuzz.Data.UnitSupervisor do
 
   import Modbuzz, only: [is_unit_id: 1]
 
-  @doc false
   def name(server_name) do
     {:via, Registry, {Modbuzz.Registry, {server_name, __MODULE__}}}
   end

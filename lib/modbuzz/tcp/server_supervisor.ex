@@ -1,7 +1,5 @@
 defmodule Modbuzz.TCP.ServerSupervisor do
-  @moduledoc """
-  This is `Modbuzz.TCP.Server`'s `Supervisor` module.
-  """
+  @moduledoc false
 
   use Supervisor
 

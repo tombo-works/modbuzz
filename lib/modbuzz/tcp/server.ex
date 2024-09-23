@@ -1,7 +1,5 @@
 defmodule Modbuzz.TCP.Server do
-  @moduledoc """
-  This is MODBUS TCP server `GenServer` module.
-  """
+  @moduledoc false
 
   use GenServer
 

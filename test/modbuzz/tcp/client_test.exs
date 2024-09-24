@@ -209,9 +209,10 @@ defmodule Modbuzz.TCP.ClientTest do
       |> expect(:recv, fn _, _, _ -> {:error, :closed} end)
       |> expect(:close, fn _ -> :ok end)
       |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ ->
+      |> expect(:send, fn _, _ -> {:error, :closed} end)
+      |> expect(:connect, fn _, _, _, _ ->
         send(parent, {ref, :send})
-        {:error, :closed}
+        {:ok, _dummy_port = make_ref()}
       end)
 
       start_link_supervised!(
@@ -235,9 +236,10 @@ defmodule Modbuzz.TCP.ClientTest do
       |> expect(:close, fn _ -> :ok end)
       |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
       |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ ->
+      |> expect(:recv, fn _, _, _ -> {:error, :closed} end)
+      |> expect(:connect, fn _, _, _, _ ->
         send(parent, {ref, :recv})
-        {:error, :closed}
+        {:ok, _dummy_port = make_ref()}
       end)
 
       start_link_supervised!(
@@ -355,9 +357,10 @@ defmodule Modbuzz.TCP.ClientTest do
       |> expect(:send, fn _, _ -> {:error, :closed} end)
       |> expect(:close, fn _ -> :ok end)
       |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ ->
+      |> expect(:send, fn _, _ -> {:error, :closed} end)
+      |> expect(:connect, fn _, _, _, _ ->
         send(parent, {ref, :send})
-        {:error, :closed}
+        {:ok, _dummy_port = make_ref()}
       end)
 
       start_link_supervised!(

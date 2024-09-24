@@ -135,7 +135,7 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def handle_continue({:recall, unit_id, request, timeout, from}, %{socket: nil} = state) do
-    %{transport: transport, socket: socket, transaction_id: transaction_id} = state
+    %{transport: transport, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
     adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
@@ -161,19 +161,18 @@ defmodule Modbuzz.TCP.Client do
       {:send, {:error, reason} = error} ->
         Logger.error("#{__MODULE__}: :recall send failed, the reason is #{inspect(reason)}.")
         GenServer.reply(from, error)
-        {:noreply, %{state | socket: socket}}
+        {:noreply, state, {:continue, :connect}}
 
       {:recv, {:error, reason} = error} ->
         Logger.error("#{__MODULE__}: :recall recv failed, the reason is #{inspect(reason)}.")
         GenServer.reply(from, error)
-        {:noreply, %{state | socket: socket}}
+        {:noreply, state, {:continue, :connect}}
     end
   end
 
   def handle_continue({:recast, unit_id, request, from_pid}, %{socket: nil} = state) do
     %{
       transport: transport,
-      socket: socket,
       transaction_id: transaction_id,
       transactions: transactions
     } = state
@@ -201,7 +200,7 @@ defmodule Modbuzz.TCP.Client do
 
       {:send, {:error, reason}} ->
         Logger.error("#{__MODULE__}: :recast send failed, the reason is #{inspect(reason)}.")
-        {:noreply, %{state | socket: socket}}
+        {:noreply, state, {:continue, :connect}}
     end
   end
 

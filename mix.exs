@@ -37,6 +37,7 @@ defmodule Modbuzz.MixProject do
       {0x04, ReadInputRegisters},
       {0x05, WriteSingleCoil},
       {0x06, WriteSingleRegister},
+      {0x08, Diagnostics},
       {0x0F, WriteMultipleCoils},
       {0x10, WriteMultipleRegisters}
     ]

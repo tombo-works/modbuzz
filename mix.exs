@@ -29,6 +29,19 @@ defmodule Modbuzz.MixProject do
     ]
   end
 
+  def pdu_seed() do
+    [
+      {0x01, ReadCoils},
+      {0x02, ReadDiscreteInputs},
+      {0x03, ReadHoldingRegisters},
+      {0x04, ReadInputRegisters},
+      {0x05, WriteSingleCoil},
+      {0x06, WriteSingleRegister},
+      {0x0F, WriteMultipleCoils},
+      {0x10, WriteMultipleRegisters}
+    ]
+  end
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
@@ -75,9 +88,10 @@ defmodule Modbuzz.MixProject do
       docs: [
         main: "readme",
         extras: ["README.md"],
-        nest_modules_by_prefix: [
-          Modbuzz.PDU
-        ]
+        nest_modules_by_prefix:
+          for {_modbus_function_code, modbus_function} <- pdu_seed() do
+            Module.concat([Modbuzz.PDU, modbus_function])
+          end
       ]
     ]
   end

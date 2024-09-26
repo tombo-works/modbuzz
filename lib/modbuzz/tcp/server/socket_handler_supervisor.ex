@@ -13,9 +13,9 @@ defmodule Modbuzz.TCP.Server.SocketHandlerSupervisor do
       {Modbuzz.TCP.Server.SocketHandler,
        [
          transport: transport,
-         socket: socket,
          address: address,
          port: port,
+         socket: socket,
          data_source: data_source
        ]}
     )

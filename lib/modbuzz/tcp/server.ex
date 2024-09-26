@@ -3,7 +3,7 @@ defmodule Modbuzz.TCP.Server do
 
   use GenServer
 
-  require Logger
+  alias Modbuzz.TCP.Log
 
   @doc false
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -40,7 +40,7 @@ defmodule Modbuzz.TCP.Server do
         {:noreply, %{state | listen_socket: socket}, {:continue, :accept}}
 
       {:error, reason} ->
-        Logger.error("#{__MODULE__}: :listen failed, the reason is #{inspect(reason)}.")
+        Log.error(":listen failed", reason, state)
         {:noreply, state, {:continue, :listen}}
     end
   end
@@ -65,7 +65,7 @@ defmodule Modbuzz.TCP.Server do
         )
 
       {:error, reason} ->
-        Logger.error("#{__MODULE__}: #{inspect(reason)}")
+        Log.error(":accept failed", reason, state)
     end
 
     {:noreply, state, {:continue, :accept}}

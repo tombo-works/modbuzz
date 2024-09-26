@@ -9,16 +9,7 @@ defmodule Modbuzz.PDU do
   def encode_request(struct), do: {:ok, Modbuzz.PDU.Protocol.encode(struct)}
   def encode_response(struct), do: {:ok, Modbuzz.PDU.Protocol.encode(struct)}
 
-  for {modbus_function_code, modbus_function} <- [
-        {0x01, ReadCoils},
-        {0x02, ReadDiscreteInputs},
-        {0x03, ReadHoldingRegisters},
-        {0x04, ReadInputRegisters},
-        {0x05, WriteSingleCoil},
-        {0x06, WriteSingleRegister},
-        {0x0F, WriteMultipleCoils},
-        {0x10, WriteMultipleRegisters}
-      ] do
+  for {modbus_function_code, modbus_function} <- Modbuzz.MixProject.pdu_seed() do
     req_module = Module.concat([Modbuzz.PDU, modbus_function, Req])
     res_module = Module.concat([Modbuzz.PDU, modbus_function, Res])
     err_module = Module.concat([Modbuzz.PDU, modbus_function, Err])

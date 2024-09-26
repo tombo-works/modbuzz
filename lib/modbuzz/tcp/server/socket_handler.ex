@@ -3,7 +3,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
 
   use GenServer, restart: :temporary
 
-  require Logger
+  alias Modbuzz.TCP.Log
 
   def start_link(args) do
     GenServer.start_link(__MODULE__, args)
@@ -11,6 +11,8 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
 
   def init(args) do
     transport = Keyword.fetch!(args, :transport)
+    address = Keyword.fetch!(args, :address)
+    port = Keyword.fetch!(args, :port)
     socket = Keyword.fetch!(args, :socket)
     data_source = Keyword.fetch!(args, :data_source)
     timeout = Keyword.get(args, :timeout, 5000)
@@ -18,6 +20,8 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
     {:ok,
      %{
        transport: transport,
+       address: address,
+       port: port,
        socket: socket,
        data_source: data_source,
        timeout: timeout
@@ -52,7 +56,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
         {:stop, reason, state}
 
       {:error, reason} ->
-        Logger.error("#{__MODULE__}: #{inspect(reason)}")
+        Log.error(":recv failed", reason, state)
         :ok = transport.close(socket)
         {:stop, reason, state}
     end
@@ -66,7 +70,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
       end
     catch
       :exit, {:noproc, mfa} ->
-        Logger.error("#{__MODULE__}: `#{data_source}` not found. (mfa is #{inspect(mfa)})")
+        Log.error("`#{data_source}` not found. (mfa is #{inspect(mfa)})")
         Modbuzz.PDU.to_error(request)
     end
   end

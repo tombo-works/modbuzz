@@ -3,7 +3,7 @@ defmodule Modbuzz.TCP.Client do
 
   use GenServer
 
-  require Logger
+  alias Modbuzz.TCP.Log
 
   defmodule Transaction do
     @moduledoc false
@@ -125,11 +125,11 @@ defmodule Modbuzz.TCP.Client do
   def handle_continue(:connect, %{socket: nil} = state) do
     case gen_tcp_connect(state) do
       {:ok, socket} ->
-        Logger.debug("#{__MODULE__}: :connect succeeded.")
+        Log.debug(":connect succeeded", state)
         {:noreply, %{state | socket: socket}}
 
       {:error, reason} ->
-        Logger.error("#{__MODULE__}: :connect failed, the reason is #{inspect(reason)}.")
+        Log.error(":connect failed", reason, state)
         {:noreply, state, {:continue, :connect}}
     end
   end
@@ -154,17 +154,17 @@ defmodule Modbuzz.TCP.Client do
       {:noreply, %{state | socket: socket}}
     else
       {:connect, {:error, reason} = error} ->
-        Logger.error("#{__MODULE__}: :recall connect failed, the reason is #{inspect(reason)}.")
+        Log.error(":recall connect failed", reason, state)
         GenServer.reply(from, error)
         {:noreply, state, {:continue, :connect}}
 
       {:send, {:error, reason} = error} ->
-        Logger.error("#{__MODULE__}: :recall send failed, the reason is #{inspect(reason)}.")
+        Log.error(":recall send failed", reason, state)
         GenServer.reply(from, error)
         {:noreply, state, {:continue, :connect}}
 
       {:recv, {:error, reason} = error} ->
-        Logger.error("#{__MODULE__}: :recall recv failed, the reason is #{inspect(reason)}.")
+        Log.error(":recall recv failed", reason, state)
         GenServer.reply(from, error)
         {:noreply, state, {:continue, :connect}}
     end
@@ -195,11 +195,11 @@ defmodule Modbuzz.TCP.Client do
       {:noreply, %{state | socket: socket, transactions: transactions}}
     else
       {:connect, {:error, reason}} ->
-        Logger.error("#{__MODULE__}: :recast connect failed, the reason is #{inspect(reason)}.")
+        Log.error(":recast connect failed", reason, state)
         {:noreply, state, {:continue, :connect}}
 
       {:send, {:error, reason}} ->
-        Logger.error("#{__MODULE__}: :recast send failed, the reason is #{inspect(reason)}.")
+        Log.error(":recast send failed", reason, state)
         {:noreply, state, {:continue, :connect}}
     end
   end
@@ -223,18 +223,14 @@ defmodule Modbuzz.TCP.Client do
       {:reply, res_tuple, state}
     else
       {:send, {:error, reason}} ->
-        Logger.warning(
-          "#{__MODULE__}: :call send failed, the reason is #{inspect(reason)}, :recall."
-        )
+        Log.warning(":call send failed, :recall", reason, state)
 
         :ok = transport.close(socket)
         state = %{state | socket: nil}
         {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
 
       {:recv, {:error, reason}} ->
-        Logger.warning(
-          "#{__MODULE__}: :call recv failed, the reason is #{inspect(reason)}, :recall."
-        )
+        Log.warning(":call recv failed, :recall", reason, state)
 
         :ok = transport.close(socket)
         state = %{state | socket: nil}
@@ -273,9 +269,7 @@ defmodule Modbuzz.TCP.Client do
         {:noreply, %{state | transactions: transactions}}
 
       {:error, reason} ->
-        Logger.warning(
-          "#{__MODULE__}: :cast send failed, the reason is #{inspect(reason)}, :recast."
-        )
+        Log.warning(":cast send failed, :recast", reason, state)
 
         :ok = transport.close(socket)
         state = %{state | socket: nil}
@@ -316,7 +310,7 @@ defmodule Modbuzz.TCP.Client do
   def handle_info({:tcp_closed, socket}, %{socket: socket, active: true} = state) do
     %{transport: transport, transactions: transactions} = state
 
-    Logger.warning("#{__MODULE__}: transport closed.")
+    Log.warning("transport closed.", nil, state)
     :ok = transport.close(socket)
     state = %{state | socket: nil}
 
@@ -329,7 +323,7 @@ defmodule Modbuzz.TCP.Client do
         {:noreply, state, {:continue, :connect}}
 
       [{_transaction_id, transaction}] ->
-        Logger.debug("#{__MODULE__}: sent successfully but RST ACK received, :recast.")
+        Log.debug("sent successfully but RST ACK received, :recast", state)
 
         {:noreply, state,
          {:continue, {:recast, transaction.unit_id, transaction.request, transaction.from_pid}}}
@@ -338,7 +332,7 @@ defmodule Modbuzz.TCP.Client do
 
   def handle_info({:tcp_error, socket, reason}, %{socket: socket, active: true} = state) do
     %{transport: transport} = state
-    Logger.error("#{__MODULE__}: transport error, the reason is #{inspect(reason)}.")
+    Log.error("transport error", reason, state)
     :ok = transport.close(socket)
     {:noreply, %{state | socket: nil}, {:continue, :connect}}
   end

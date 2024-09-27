@@ -45,7 +45,11 @@ defmodule Modbuzz.PDU.ReadInputRegisters do
   end
 
   defmodule Res do
-    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)
+    @moduledoc """
+    #{Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)}
+
+    `byte_count` is automatically calculated during encoding.
+    """
 
     @type t :: %__MODULE__{
             byte_count: byte(),
@@ -67,7 +71,8 @@ defmodule Modbuzz.PDU.ReadInputRegisters do
       """
       def encode(struct) do
         binary = struct.input_registers |> Modbuzz.PDU.Helper.to_binary()
-        <<@function_code, struct.byte_count, binary::binary-size(struct.byte_count)>>
+        byte_count = byte_size(binary)
+        <<@function_code, byte_count, binary::binary-size(byte_count)>>
       end
 
       @doc """

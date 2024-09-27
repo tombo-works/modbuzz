@@ -42,14 +42,18 @@ defmodule Modbuzz.PDU.ReadHoldingRegisters do
   end
 
   defmodule Res do
-    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)
+    @moduledoc """
+    #{Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)}
+
+    `byte_count` is automatically calculated during encoding.
+    """
 
     @type t :: %__MODULE__{
             byte_count: byte(),
-            register_value: 0x0000..0xFFFF
+            register_values: [0x0000..0xFFFF]
           }
 
-    defstruct [:byte_count, :register_value]
+    defstruct [:byte_count, :register_values]
 
     defimpl Modbuzz.PDU.Protocol do
       @function_code 0x03
@@ -57,14 +61,15 @@ defmodule Modbuzz.PDU.ReadHoldingRegisters do
       @doc """
           iex> res = %Modbuzz.PDU.ReadHoldingRegisters.Res{
           ...>   byte_count: 0x06,
-          ...>   register_value: [555, 0, 100]
+          ...>   register_values: [555, 0, 100]
           ...> }
           iex> Modbuzz.PDU.Protocol.encode(res)
           <<#{@function_code}, 0x06, 0x02, 0x2B, 0x00, 0x00, 0x00, 0x64>>
       """
       def encode(struct) do
-        binary = struct.register_value |> Modbuzz.PDU.Helper.to_binary()
-        <<@function_code, struct.byte_count, binary::binary-size(struct.byte_count)>>
+        binary = struct.register_values |> Modbuzz.PDU.Helper.to_binary()
+        byte_count = byte_size(binary)
+        <<@function_code, byte_count, binary::binary-size(byte_count)>>
       end
 
       @doc """
@@ -72,14 +77,14 @@ defmodule Modbuzz.PDU.ReadHoldingRegisters do
           iex> Modbuzz.PDU.Protocol.decode(res, <<#{@function_code}, 0x06, 0x02, 0x2B, 0x00, 0x00, 0x00, 0x64>>)
           %Modbuzz.PDU.ReadHoldingRegisters.Res{
             byte_count: 0x06,
-            register_value: [555, 0, 100]
+            register_values: [555, 0, 100]
           }
       """
-      def decode(struct, <<@function_code, byte_count, register_value::binary-size(byte_count)>>) do
+      def decode(struct, <<@function_code, byte_count, register_values::binary-size(byte_count)>>) do
         %{
           struct
           | byte_count: byte_count,
-            register_value: Modbuzz.PDU.Helper.to_registers(register_value)
+            register_values: Modbuzz.PDU.Helper.to_registers(register_values)
         }
       end
     end

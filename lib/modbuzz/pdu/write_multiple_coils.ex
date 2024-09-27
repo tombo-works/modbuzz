@@ -2,7 +2,11 @@ defmodule Modbuzz.PDU.WriteMultipleCoils do
   @moduledoc false
 
   defmodule Req do
-    @moduledoc Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)
+    @moduledoc """
+    Modbuzz.PDU.Helper.module_one_line_doc(__MODULE__)
+
+    `byte_count` and `quantity_of_outputs` are automatically calculated during encoding.
+    """
 
     @type t :: %__MODULE__{
             starting_address: 0x0000..0xFFFF,

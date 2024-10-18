@@ -125,6 +125,44 @@ defmodule Modbuzz do
     end
   end
 
+  @spec start_rtu_client(
+          name :: client(),
+          device_name :: String.t(),
+          transport_opts :: keyword()
+        ) :: :ok | {:error, :already_started}
+  def start_rtu_client(name, device_name, transport_opts) do
+    case DynamicSupervisor.start_child(
+           Modbuzz.Application.client_supervisor_name(),
+           {Modbuzz.RTU.Client,
+            [name: name, device_name: device_name, transport_opts: transport_opts]}
+         ) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> {:error, :already_started}
+    end
+  end
+
+  def start_rtu_server(name, device_name, transport_opts, data_source) do
+    case DynamicSupervisor.start_child(
+           Modbuzz.Application.server_supervisor_name(),
+           {Modbuzz.RTU.ServerSupervisor,
+            [
+              name: name,
+              device_name: device_name,
+              transport_opts: transport_opts,
+              data_source: data_source
+            ]}
+         ) do
+      {:ok, _pid} ->
+        :ok
+
+      {:error, {:shutdown, {:failed_to_start_child, _, {:already_started, _pid}}}} ->
+        {:error, :already_started}
+
+      {:error, {:already_started, _pid}} ->
+        {:error, :already_started}
+    end
+  end
+
   @doc false
   defguard is_unit_id(unit_id) when unit_id in 0..247
 end

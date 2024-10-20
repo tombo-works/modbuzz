@@ -91,7 +91,18 @@ defmodule Modbuzz.RTU.Client do
   def handle_continue({:read, unit_id, request, timeout, from}, state) do
     %{transport: transport, pid: pid, recall: recall} = state
 
-    case transport.read(pid, timeout) do
+    case transport.read(pid, 100) do
+      {:ok, <<>>} ->
+        if recall do
+          Log.error(":recall no response", nil, state)
+          {:noreply, %{state | binary: <<>>, recall: false}}
+        else
+          Log.warning(":call no response, :recall", nil, state)
+
+          {:noreply, %{state | binary: <<>>, recall: true},
+           {:continue, {:recall, unit_id, request, timeout, from}}}
+        end
+
       {:ok, binary} ->
         new_binary = state.binary <> binary
 
@@ -111,7 +122,7 @@ defmodule Modbuzz.RTU.Client do
 
       {:error, reason} ->
         if recall do
-          Log.warning(":recall read failed", reason, state)
+          Log.error(":recall read failed", reason, state)
           {:noreply, %{state | binary: <<>>, recall: false}}
         else
           Log.warning(":call read failed, :recall", reason, state)

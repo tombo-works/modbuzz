@@ -14,12 +14,17 @@ defmodule Modbuzz.RTU.Client.Receiver do
     {:via, Registry, {Modbuzz.Registry, {client_name, __MODULE__}}}
   end
 
+  def pid(client_name) do
+    GenServer.whereis(name(client_name))
+  end
+
   def busy_with?(name, adu) when is_struct(adu, ADU) and is_valid_unit_id(adu.unit_id) do
     GenServer.call(name, {:busy_with?, adu})
   end
 
-  def will_respond(name, to, adu) when is_struct(adu, ADU) and is_valid_unit_id(adu.unit_id) do
-    GenServer.call(name, {:will_respond, to, adu})
+  def will_respond(name, to, adu, timeout)
+      when is_struct(adu, ADU) and is_valid_unit_id(adu.unit_id) do
+    GenServer.call(name, {:will_respond, to, adu, timeout})
   end
 
   def start_link(args) do
@@ -27,13 +32,10 @@ defmodule Modbuzz.RTU.Client.Receiver do
     GenServer.start_link(__MODULE__, args, name: name(client_name))
   end
 
-  def init(args) do
-    timeout = Keyword.get(args, :timeout, 100)
-
+  def init(_args) do
     {:ok,
      %{
        callers: List.duplicate(nil, @unit_id_max + 1),
-       timeout: timeout,
        binary: <<>>
      }}
   end
@@ -46,8 +48,8 @@ defmodule Modbuzz.RTU.Client.Receiver do
     {:reply, not is_nil(caller), state}
   end
 
-  def handle_call({:will_respond, to, adu}, _from, state) do
-    %{callers: callers, timeout: timeout} = state
+  def handle_call({:will_respond, to, adu, timeout}, _from, state) do
+    %{callers: callers} = state
 
     caller = Enum.fetch!(callers, adu.unit_id)
 

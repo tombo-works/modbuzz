@@ -7,6 +7,10 @@ defmodule Modbuzz.RTU.Client do
 
   @server_device_busy 0x06
 
+  def call(name, unit_id, request, timeout \\ 5000) do
+    GenServer.call(name, {:call, unit_id, request, timeout}, timeout + 10)
+  end
+
   def start_link(args) do
     name = Keyword.fetch!(args, :name)
     GenServer.start_link(__MODULE__, args, name: name)
@@ -32,7 +36,7 @@ defmodule Modbuzz.RTU.Client do
      }}
   end
 
-  def handle_call({:call, unit_id, request, _timeout}, from, state) do
+  def handle_call({:call, unit_id, request, timeout}, from, state) do
     %{
       transport: transport,
       transport_pid: transport_pid,
@@ -48,10 +52,10 @@ defmodule Modbuzz.RTU.Client do
     else
       to = from
 
-      case Receiver.will_respond(receiver, to, adu) do
+      case Receiver.will_respond(receiver, to, adu, timeout) do
         :ok ->
           binary = ADU.encode(adu)
-          transport.write(transport_pid, binary)
+          transport.write(transport_pid, binary, timeout)
           {:noreply, state}
 
         {:error, reason} ->

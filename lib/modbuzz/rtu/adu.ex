@@ -21,7 +21,7 @@ defmodule Modbuzz.RTU.ADU do
   def decode_response(<<unit_id, binary::binary>>) do
     with {:ok, pdu_length} <- Modbuzz.PDU.response_length(binary),
          <<pdu::binary-size(pdu_length), crc::binary-size(2)>> <- binary do
-      if(crc(<<unit_id, pdu::binary>>) == crc) do
+      if crc(<<unit_id, pdu::binary>>) == crc do
         {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
       else
         {:error, %__MODULE__{unit_id: unit_id, pdu: pdu, crc_valid?: false}}

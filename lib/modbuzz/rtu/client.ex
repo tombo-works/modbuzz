@@ -1,4 +1,6 @@
 defmodule Modbuzz.RTU.Client do
+  @moduledoc false
+
   use GenServer
 
   alias Modbuzz.PDU

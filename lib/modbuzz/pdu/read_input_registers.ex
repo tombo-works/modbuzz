@@ -41,6 +41,10 @@ defmodule Modbuzz.PDU.ReadInputRegisters do
             quantity_of_input_registers: quantity_of_input_registers
         }
       end
+
+      def expected_binary_size(_struct, <<@function_code, _rest::binary>>) do
+        1 + 2 + 2
+      end
     end
   end
 
@@ -90,6 +94,10 @@ defmodule Modbuzz.PDU.ReadInputRegisters do
             input_registers: Modbuzz.PDU.Helper.to_registers(input_registers)
         }
       end
+
+      def expected_binary_size(_struct, <<@function_code, byte_count, _rest::binary>>) do
+        1 + 1 + byte_count
+      end
     end
   end
 
@@ -121,6 +129,10 @@ defmodule Modbuzz.PDU.ReadInputRegisters do
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}
+      end
+
+      def expected_binary_size(_struct, <<@error_code, _rest::binary>>) do
+        1 + 1
       end
     end
   end

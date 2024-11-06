@@ -34,6 +34,10 @@ defmodule Modbuzz.PDU.ReadDiscreteInputs do
       def decode(struct, <<@function_code, starting_address::16, quantity_of_inputs::16>>) do
         %{struct | starting_address: starting_address, quantity_of_inputs: quantity_of_inputs}
       end
+
+      def expected_binary_size(_struct, <<@function_code, _rest::binary>>) do
+        1 + 2 + 2
+      end
     end
   end
 
@@ -91,6 +95,10 @@ defmodule Modbuzz.PDU.ReadDiscreteInputs do
             input_status: Modbuzz.PDU.Helper.to_booleans(input_status)
         }
       end
+
+      def expected_binary_size(_struct, <<@function_code, byte_count, _rest::binary>>) do
+        1 + 1 + byte_count
+      end
     end
   end
 
@@ -122,6 +130,10 @@ defmodule Modbuzz.PDU.ReadDiscreteInputs do
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}
+      end
+
+      def expected_binary_size(_struct, <<@error_code, _rest::binary>>) do
+        1 + 1
       end
     end
   end

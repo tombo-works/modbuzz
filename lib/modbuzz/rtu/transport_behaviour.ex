@@ -10,4 +10,5 @@ defmodule Modbuzz.RTU.TransportBehaviour do
               :ok | {:error, File.posix()}
   @callback controlling_process(GenServer.server(), pid()) :: :ok | {:error, File.posix()}
   @callback write(GenServer.server(), iodata(), non_neg_integer()) :: :ok | {:error, File.posix()}
+  @callback write(GenServer.server(), iodata()) :: :ok | {:error, File.posix()}
 end

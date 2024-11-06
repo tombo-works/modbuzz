@@ -10,4 +10,6 @@ defprotocol Modbuzz.PDU.Protocol do
   def encode(struct)
   @doc false
   def decode(struct, binary)
+  @doc false
+  def expected_binary_size(struct, binary)
 end

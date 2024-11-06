@@ -36,6 +36,10 @@ defmodule Modbuzz.PDU.WriteSingleCoil do
         output_value = Modbuzz.PDU.Helper.to_boolean(output_value)
         %{struct | output_address: output_address, output_value: output_value}
       end
+
+      def expected_binary_size(_struct, <<@function_code, _rest::binary>>) do
+        1 + 2 + 2
+      end
     end
   end
 
@@ -80,6 +84,10 @@ defmodule Modbuzz.PDU.WriteSingleCoil do
             output_value: Modbuzz.PDU.Helper.to_boolean(output_value)
         }
       end
+
+      def expected_binary_size(_struct, <<@function_code, _rest::binary>>) do
+        1 + 2 + 2
+      end
     end
   end
 
@@ -111,6 +119,10 @@ defmodule Modbuzz.PDU.WriteSingleCoil do
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}
+      end
+
+      def expected_binary_size(_struct, <<@error_code, _rest::binary>>) do
+        1 + 1
       end
     end
   end

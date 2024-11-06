@@ -67,20 +67,11 @@ defmodule ModbuzzTest do
       :ok = Modbuzz.start_tcp_client(:client_1, @test_address, @test_port_1)
     end
 
-    test "return error tuple" do
-      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
-
-      assert {:error, %Modbuzz.PDU.ReadDiscreteInputs.Err{}} =
-               Modbuzz.request(:client_1, 0, request)
-
-      assert {:error, %Modbuzz.PDU.ReadDiscreteInputs.Err{}} =
-               Modbuzz.request(:data_server_1, 0, request)
-    end
-
     test "return ok tuple" do
       request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
       response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
 
+      :ok = Modbuzz.create_unit(:data_server_1)
       :ok = Modbuzz.upsert(:data_server_1, request, response)
 
       assert {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} = Modbuzz.request(:client_1, 0, request)
@@ -93,6 +84,7 @@ defmodule ModbuzzTest do
       request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
       response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
 
+      :ok = Modbuzz.create_unit(:data_server_1)
       :ok = Modbuzz.upsert(:data_server_1, request, fn _request -> response end)
 
       assert {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} = Modbuzz.request(:client_1, 0, request)
@@ -116,6 +108,8 @@ defmodule ModbuzzTest do
         input_status: List.duplicate(true, 8)
       }
 
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.create_unit(:data_server_2)
       :ok = Modbuzz.upsert(:data_server_1, request_1, response_1)
       :ok = Modbuzz.upsert(:data_server_2, request_2, response_2)
 
@@ -127,34 +121,38 @@ defmodule ModbuzzTest do
     end
   end
 
-  describe "upsert/4, delete/3, dump/2" do
+  describe "create_unit/2, upsert/4, delete/3, dump/2" do
     setup do
       :ok = Modbuzz.start_data_server(:data_server)
-    end
 
-    test "upsert/4" do
       request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
       response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
 
-      assert :ok = Modbuzz.upsert(:data_server, request, response)
-      assert :ok = Modbuzz.upsert(:data_server, request, fn _request -> response end)
+      %{request: request, response: response}
     end
 
-    test "delete/3" do
-      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
-      response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
-
-      :ok = Modbuzz.upsert(:data_server, request, response)
-      assert :ok = Modbuzz.delete(:data_server, request)
+    test "create_unit/2" do
+      assert :ok = Modbuzz.create_unit(:data_server, 1)
+      assert {:error, :already_started} = Modbuzz.create_unit(:data_server, 1)
     end
 
-    test "dump/2" do
-      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
-      response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
+    test "upsert/4", %{request: request, response: response} do
+      assert {:error, :unit_not_found} = Modbuzz.upsert(:data_server, 1, request, response)
+      :ok = Modbuzz.create_unit(:data_server, 1)
+      assert :ok = Modbuzz.upsert(:data_server, 1, request, fn _request -> response end)
+    end
 
-      assert Modbuzz.dump(:data_server) == %{}
-      :ok = Modbuzz.upsert(:data_server, request, response)
-      assert Modbuzz.dump(:data_server) == %{request => response}
+    test "delete/3", %{request: request, response: _response} do
+      assert {:error, :unit_not_found} = Modbuzz.delete(:data_server, 1, request)
+      :ok = Modbuzz.create_unit(:data_server, 1)
+      assert :ok = Modbuzz.delete(:data_server, 1, request)
+    end
+
+    test "dump/2", %{request: request, response: response} do
+      assert {:error, :unit_not_found} = Modbuzz.dump(:data_server, 1)
+      :ok = Modbuzz.create_unit(:data_server, 1)
+      :ok = Modbuzz.upsert(:data_server, 1, request, response)
+      assert Modbuzz.dump(:data_server, 1) == {:ok, %{request => response}}
     end
   end
 
@@ -170,10 +168,8 @@ defmodule ModbuzzTest do
       :ok = Modbuzz.start_tcp_server(:server_2, @test_address, @test_port_2, :client_1)
       :ok = Modbuzz.start_tcp_client(:client_2, @test_address, @test_port_2)
 
-      {:error, %Modbuzz.PDU.ReadDiscreteInputs.Err{}} = Modbuzz.request(:client_1, 0, request)
-      {:error, %Modbuzz.PDU.ReadDiscreteInputs.Err{}} = Modbuzz.request(:client_2, 0, request)
-
-      Modbuzz.upsert(:data_server_1, request, response)
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.upsert(:data_server_1, request, response)
 
       {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} = Modbuzz.request(:client_1, 0, request)
       {:ok, %Modbuzz.PDU.ReadDiscreteInputs.Res{}} = Modbuzz.request(:client_2, 0, request)

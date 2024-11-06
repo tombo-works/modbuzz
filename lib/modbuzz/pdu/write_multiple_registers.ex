@@ -62,6 +62,14 @@ defmodule Modbuzz.PDU.WriteMultipleRegisters do
             register_values: register_values
         }
       end
+
+      def expected_binary_size(
+            _struct,
+            <<@function_code, _starting_address::16, _quantity_of_registers::16, byte_count,
+              _rest::binary>>
+          ) do
+        1 + 2 + 2 + 1 + byte_count
+      end
     end
   end
 
@@ -105,6 +113,10 @@ defmodule Modbuzz.PDU.WriteMultipleRegisters do
             quantity_of_registers: quantity_of_registers
         }
       end
+
+      def expected_binary_size(_struct, <<@function_code, _rest::binary>>) do
+        1 + 2 + 2
+      end
     end
   end
 
@@ -136,6 +148,10 @@ defmodule Modbuzz.PDU.WriteMultipleRegisters do
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}
+      end
+
+      def expected_binary_size(_struct, <<@error_code, _rest::binary>>) do
+        1 + 1
       end
     end
   end

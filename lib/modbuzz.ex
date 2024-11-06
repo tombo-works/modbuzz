@@ -19,6 +19,10 @@ defmodule Modbuzz do
     GenServer.call(name, {:call, unit_id, request, timeout})
   end
 
+  @spec create_unit(name :: data_server(), unit_id(), data :: map()) ::
+          :ok | {:error, :already_started}
+  defdelegate create_unit(name, unit_id \\ 0, data \\ %{}), to: Modbuzz.Data.Server
+
   @doc """
   Upsert request response/callback pair to data server.
 
@@ -33,7 +37,7 @@ defmodule Modbuzz do
   defdelegate delete(name, unit_id \\ 0, request), to: Modbuzz.Data.Server
 
   @doc "Dump data from data server."
-  @spec dump(name :: data_server(), unit_id()) :: map()
+  @spec dump(name :: data_server(), unit_id()) :: {:ok, map()} | {:error, :unit_not_found}
   defdelegate dump(name, unit_id \\ 0), to: Modbuzz.Data.Server
 
   @doc """
@@ -141,6 +145,12 @@ defmodule Modbuzz do
     end
   end
 
+  @spec start_rtu_server(
+          name :: server(),
+          device_name :: String.t(),
+          transport_opts :: Circuits.UART.uart_option(),
+          data_source :: data_server() | client()
+        ) :: :ok | {:error, :already_started}
   def start_rtu_server(name, device_name, transport_opts, data_source) do
     case DynamicSupervisor.start_child(
            Modbuzz.Application.server_supervisor_name(),

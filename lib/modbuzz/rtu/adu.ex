@@ -18,8 +18,8 @@ defmodule Modbuzz.RTU.ADU do
     binary <> crc(binary)
   end
 
-  def decode_response(<<unit_id, binary::binary>>) do
-    with {:ok, pdu_length} <- Modbuzz.PDU.response_length(binary),
+  def decode_request(<<unit_id, binary::binary>>) do
+    with {:ok, pdu_length} <- Modbuzz.PDU.request_length(binary),
          <<pdu::binary-size(pdu_length), crc::binary-size(2)>> <- binary do
       if crc(<<unit_id, pdu::binary>>) == crc do
         {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
@@ -31,30 +31,17 @@ defmodule Modbuzz.RTU.ADU do
     end
   end
 
-  def decode(binary) when is_binary(binary) do
-    length = byte_size(binary)
-    <<binary::binary-size(length - 2), crc::binary-size(2)>> = binary
-    <<unit_id, pdu::binary>> = binary
-
-    %__MODULE__{
-      unit_id: unit_id,
-      pdu: pdu,
-      crc_valid?: crc(binary) == crc
-    }
-  end
-
-  def decode!(binary) when is_binary(binary) do
-    length = byte_size(binary)
-    <<binary::binary-size(length - 2), crc::binary-size(2)>> = binary
-    <<unit_id, pdu::binary>> = binary
-
-    if crc(binary) != crc, do: raise(Modbuzz.RTU.Exceptions.CRCError)
-
-    %__MODULE__{
-      unit_id: unit_id,
-      pdu: pdu,
-      crc_valid?: crc(binary) == crc
-    }
+  def decode_response(<<unit_id, binary::binary>>) do
+    with {:ok, pdu_length} <- Modbuzz.PDU.response_length(binary),
+         <<pdu::binary-size(pdu_length), crc::binary-size(2)>> <- binary do
+      if crc(<<unit_id, pdu::binary>>) == crc do
+        {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
+      else
+        {:error, %__MODULE__{unit_id: unit_id, pdu: pdu, crc_valid?: false}}
+      end
+    else
+      _ -> {:error, :binary_is_short}
+    end
   end
 
   defp crc(binary) do

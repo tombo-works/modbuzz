@@ -62,6 +62,14 @@ defmodule Modbuzz.PDU.WriteMultipleCoils do
             output_values: output_values
         }
       end
+
+      def expected_binary_size(
+            _struct,
+            <<@function_code, _starting_address::16, _quantity_of_outputs::16, byte_count,
+              _rest::binary>>
+          ) do
+        1 + 2 + 2 + 1 + byte_count
+      end
     end
   end
 
@@ -101,6 +109,10 @@ defmodule Modbuzz.PDU.WriteMultipleCoils do
       def decode(struct, <<@function_code, starting_address::16, quantity_of_outputs::16>>) do
         %{struct | starting_address: starting_address, quantity_of_outputs: quantity_of_outputs}
       end
+
+      def expected_binary_size(_struct, <<@function_code, _rest::binary>>) do
+        1 + 2 + 2
+      end
     end
   end
 
@@ -132,6 +144,10 @@ defmodule Modbuzz.PDU.WriteMultipleCoils do
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}
+      end
+
+      def expected_binary_size(_struct, <<@error_code, _rest::binary>>) do
+        1 + 1
       end
     end
   end

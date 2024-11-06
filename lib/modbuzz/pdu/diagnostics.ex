@@ -34,6 +34,10 @@ defmodule Modbuzz.PDU.Diagnostics do
       def decode(struct, <<@function_code, sub_function::16, data::16>>) do
         %{struct | sub_function: sub_function, data: data}
       end
+
+      def expected_binary_size(_struct, <<@function_code, _rest::binary>>) do
+        1 + 2 + 2
+      end
     end
   end
 
@@ -73,6 +77,10 @@ defmodule Modbuzz.PDU.Diagnostics do
       def decode(struct, <<@function_code, sub_function::16, data::16>>) do
         %{struct | sub_function: sub_function, data: data}
       end
+
+      def expected_binary_size(_struct, <<@function_code, _rest::binary>>) do
+        1 + 2 + 2
+      end
     end
   end
 
@@ -104,6 +112,10 @@ defmodule Modbuzz.PDU.Diagnostics do
       """
       def decode(struct, <<@error_code, exception_code>>) do
         %{struct | exception_code: exception_code}
+      end
+
+      def expected_binary_size(_struct, <<@error_code, _rest::binary>>) do
+        1 + 1
       end
     end
   end

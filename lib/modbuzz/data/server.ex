@@ -11,11 +11,6 @@ defmodule Modbuzz.Data.Server do
     GenServer.call(name, {:create_unit, unit_id, initial_data})
   end
 
-  @spec list_unit_id(Modbuzz.data_server()) :: [] | [Modbuzz.unit_id()]
-  def list_unit_id(name) do
-    GenServer.call(name, :list_unit_id)
-  end
-
   @spec upsert(
           Modbuzz.data_server(),
           Modbuzz.unit_id(),
@@ -46,7 +41,7 @@ defmodule Modbuzz.Data.Server do
   def init(args) do
     name = Keyword.fetch!(args, :name)
 
-    {:ok, %{name: name, unit_ids: []}}
+    {:ok, %{name: name}}
   end
 
   def handle_call({:call, unit_id, request, _timeout}, from, state) do
@@ -80,13 +75,9 @@ defmodule Modbuzz.Data.Server do
 
   def handle_call({:create_unit, unit_id, initial_data}, _from, state) do
     case Modbuzz.Data.UnitSupervisor.create_unit(state.name, unit_id, initial_data) do
-      {:ok, _pid} -> {:reply, :ok, %{state | unit_ids: [unit_id | state.unit_ids]}}
+      {:ok, _pid} -> {:reply, :ok, state}
       {:error, {:already_started, _pid}} -> {:reply, {:error, :already_started}, state}
     end
-  end
-
-  def handle_call(:list_unit_id, _from, state) do
-    {:reply, state.unit_ids, state}
   end
 
   def handle_call({:upsert, unit_id, request, res_or_cb}, _from, state) do

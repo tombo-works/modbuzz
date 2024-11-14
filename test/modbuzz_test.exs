@@ -216,6 +216,21 @@ defmodule ModbuzzTest do
       assert Task.await(task) == {:ok, response}
     end
 
+    @tag :skip
+    test "TCP/RTU, with a real sensor" do
+      :ok = Modbuzz.start_rtu_client(:rtu_client, "ttyUSB0", speed: 9600)
+      :ok = Modbuzz.start_tcp_server(:tcp_server, @test_address, @test_port_1, :rtu_client)
+      :ok = Modbuzz.start_tcp_client(:tcp_client, @test_address, @test_port_1)
+
+      request = %Modbuzz.PDU.ReadHoldingRegisters.Req{
+        starting_address: 0,
+        quantity_of_registers: 2
+      }
+
+      assert {:ok, %Modbuzz.PDU.ReadHoldingRegisters.Res{}} =
+               Modbuzz.request(:tcp_client, 1, request)
+    end
+
     test "RTU/TCP", %{request: request, response: response} do
       me = self()
 

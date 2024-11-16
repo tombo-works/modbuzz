@@ -42,8 +42,7 @@ defmodule Modbuzz.Data.Unit do
   def start_link(args) do
     server_name = Keyword.fetch!(args, :server_name)
     unit_id = Keyword.fetch!(args, :unit_id)
-    initial_state = Keyword.fetch!(args, :initial_state)
 
-    Agent.start_link(fn -> initial_state end, name: name(server_name, unit_id))
+    Agent.start_link(fn -> _initial_state = %{} end, name: name(server_name, unit_id))
   end
 end

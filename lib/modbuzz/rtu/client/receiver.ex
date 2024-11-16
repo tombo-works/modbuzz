@@ -5,6 +5,7 @@ defmodule Modbuzz.RTU.Client.Receiver do
 
   alias Modbuzz.PDU
   alias Modbuzz.RTU.ADU
+  alias Modbuzz.RTU.Log
 
   @server_device_failure 0x04
   @server_device_busy 0x06
@@ -78,7 +79,8 @@ defmodule Modbuzz.RTU.Client.Receiver do
       # already responded
       {:noreply, state}
     else
-      # something wrong, treat as server failure
+      Log.error("RTU server didn't respond.")
+      # treat as server device failure
       {:ok, req} = PDU.decode_request(adu.pdu)
       err = PDU.to_error(req, @server_device_failure)
       GenServer.reply(caller, {:error, err})
@@ -107,7 +109,8 @@ defmodule Modbuzz.RTU.Client.Receiver do
       {:error, :binary_is_short} ->
         {:noreply, %{state | binary: new_binary}}
 
-      {:error, %ADU{unit_id: unit_id, pdu: _pdu, crc_valid?: false}} ->
+      {:error, %ADU{unit_id: unit_id, pdu: _pdu, crc_valid?: false} = adu} ->
+        Log.warning("CRC error detected, #{inspect(adu)}.")
         caller = Enum.fetch!(callers, unit_id)
         if not is_nil(caller), do: GenServer.reply(caller, {:error, :crc_error})
 

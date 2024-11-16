@@ -11,6 +11,10 @@ defmodule Modbuzz.RTU.Log do
     Logger.error(what_happend <> why(reason) <> where(state))
   end
 
+  def warning(what_happend) do
+    Logger.warning(what_happend)
+  end
+
   def warning(what_happend, reason, state) do
     Logger.warning(what_happend <> why(reason) <> where(state))
   end

@@ -5,6 +5,7 @@ defmodule Modbuzz.RTU.Server do
 
   alias Modbuzz.PDU
   alias Modbuzz.RTU.ADU
+  alias Modbuzz.RTU.Log
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(args) when is_list(args) do
@@ -58,7 +59,8 @@ defmodule Modbuzz.RTU.Server do
       {:error, :binary_is_short} ->
         {:noreply, %{state | binary: new_binary}}
 
-      {:error, %ADU{unit_id: _unit_id, pdu: _pdu, crc_valid?: false}} ->
+      {:error, %ADU{unit_id: _unit_id, pdu: _pdu, crc_valid?: false} = adu} ->
+        Log.warning("CRC error detected, #{inspect(adu)}.")
         # ignore request
         {:noreply, %{state | binary: <<>>}}
     end

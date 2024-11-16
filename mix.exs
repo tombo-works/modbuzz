@@ -6,7 +6,7 @@ defmodule Modbuzz.MixProject do
   def project do
     [
       app: :modbuzz,
-      version: "0.1.5",
+      version: "0.2.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -58,7 +58,8 @@ defmodule Modbuzz.MixProject do
 
   defp hex() do
     [
-      description: "Yet another MODBUS library, supporting both TCP and RTU.",
+      description:
+        "Yet another MODBUS library, supporting both TCP and RTU, providing gateway functionality.",
       package: [
         files: ~w"LICENSES lib README.md REUSE.toml mix.exs",
         licenses: ["Apache-2.0"],

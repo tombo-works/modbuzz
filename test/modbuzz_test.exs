@@ -138,7 +138,7 @@ defmodule ModbuzzTest do
 
     test "create_unit/2" do
       assert :ok = Modbuzz.create_unit(:data_server, 1)
-      assert {:error, :already_started} = Modbuzz.create_unit(:data_server, 1)
+      assert {:error, :already_created} = Modbuzz.create_unit(:data_server, 1)
     end
 
     test "upsert/4", %{request: request, response: response} do

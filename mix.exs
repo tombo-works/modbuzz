@@ -58,7 +58,7 @@ defmodule Modbuzz.MixProject do
 
   defp hex() do
     [
-      description: "Yet another MODBUS TCP library.",
+      description: "Yet another MODBUS library, supporting both TCP and RTU.",
       package: [
         files: ~w"LICENSES lib README.md REUSE.toml mix.exs",
         licenses: ["Apache-2.0"],

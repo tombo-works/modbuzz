@@ -1,6 +1,6 @@
 defmodule Modbuzz do
   @moduledoc """
-  Documentation for `Modbuzz`.
+  `Modbuzz` is yet another MODBUS library, supporting both TCP and RTU.
   """
 
   @type request :: Modbuzz.PDU.Protocol.t()
@@ -19,9 +19,9 @@ defmodule Modbuzz do
     GenServer.call(name, {:call, unit_id, request, timeout})
   end
 
-  @spec create_unit(name :: data_server(), unit_id(), data :: map()) ::
-          :ok | {:error, :already_started}
-  defdelegate create_unit(name, unit_id \\ 0, data \\ %{}), to: Modbuzz.Data.Server
+  @doc "Create a unit under the data server."
+  @spec create_unit(name :: data_server(), unit_id()) :: :ok | {:error, :already_created}
+  defdelegate create_unit(name, unit_id \\ 0), to: Modbuzz.Data.Server
 
   @doc """
   Upsert request response/callback pair to data server.
@@ -29,11 +29,12 @@ defmodule Modbuzz do
   When using a callback, the user is responsible for the callback.
   This library does not handle its error. In case of an error, the request will simply time out with noreply.
   """
-  @spec upsert(name :: data_server(), unit_id(), request(), response() | callback()) :: :ok
+  @spec upsert(name :: data_server(), unit_id(), request(), response() | callback()) ::
+          :ok | {:error, :unit_not_found}
   defdelegate upsert(name, unit_id \\ 0, request, res_or_cb), to: Modbuzz.Data.Server
 
   @doc "Delete request response pair from data server."
-  @spec delete(name :: data_server(), unit_id(), request()) :: :ok
+  @spec delete(name :: data_server(), unit_id(), request()) :: :ok | {:error, :unit_not_found}
   defdelegate delete(name, unit_id \\ 0, request), to: Modbuzz.Data.Server
 
   @doc "Dump data from data server."
@@ -49,8 +50,9 @@ defmodule Modbuzz do
       iex> alias Modbuzz.PDU.WriteSingleCoil
       iex> req = %WriteSingleCoil.Req{output_address: 0 , output_value: true}
       iex> res = %WriteSingleCoil.Res{output_address: 0 , output_value: true}
-      iex> :ok = Modbuzz.upsert(:data_server, req, res)
-      iex> {:ok, ^res} = Modbuzz.request(:data_server, req)
+      iex> :ok = Modbuzz.create_unit(:data_server, 1)
+      iex> :ok = Modbuzz.upsert(:data_server, 1, req, res)
+      iex> {:ok, ^res} = Modbuzz.request(:data_server, 1, req)
   """
   @spec start_data_server(name :: data_server()) :: :ok
   def start_data_server(name) do
@@ -103,7 +105,8 @@ defmodule Modbuzz do
       iex> alias Modbuzz.PDU.WriteSingleCoil
       iex> req = %WriteSingleCoil.Req{output_address: 0 , output_value: true}
       iex> res = %WriteSingleCoil.Res{output_address: 0 , output_value: true}
-      iex> :ok = Modbuzz.upsert(:data_server, req, res)
+      iex> :ok = Modbuzz.create_unit(:data_server, 1)
+      iex> :ok = Modbuzz.upsert(:data_server, 1, req, res)
       iex> :ok = Modbuzz.start_tcp_server(:server, {127, 0, 0, 1}, 50200, :data_server)
   """
   @spec start_tcp_server(
@@ -129,6 +132,19 @@ defmodule Modbuzz do
     end
   end
 
+  @doc """
+  Start RTU client.
+
+  This function accepts `transport_opts` as its third argument which allows to pass options to `Circuits.UART`.
+  Options provided in `transport_opts` are passed directly to `Circuits.UART` without modification.
+
+  ## Examples
+
+      iex> :ok = Modbuzz.start_rtu_client(:client, "ttyUSB0", [speed: 9600])
+      iex> alias Modbuzz.PDU.WriteSingleCoil
+      iex> req = %WriteSingleCoil.Req{output_address: 0 , output_value: true}
+      iex> {:error, %WriteSingleCoil.Err{}} = Modbuzz.request(:client, req)
+  """
   @spec start_rtu_client(
           name :: client(),
           device_name :: String.t(),
@@ -145,6 +161,22 @@ defmodule Modbuzz do
     end
   end
 
+  @doc """
+  Start RTU server.
+
+  This function accepts `transport_opts` as its third argument which allows to pass options to `Circuits.UART`.
+  Options provided in `transport_opts` are passed directly to `Circuits.UART` without modification.
+
+  ## Examples
+
+      iex> :ok = Modbuzz.start_data_server(:data_server)
+      iex> alias Modbuzz.PDU.WriteSingleCoil
+      iex> req = %WriteSingleCoil.Req{output_address: 0 , output_value: true}
+      iex> res = %WriteSingleCoil.Res{output_address: 0 , output_value: true}
+      iex> :ok = Modbuzz.create_unit(:data_server, 1)
+      iex> :ok = Modbuzz.upsert(:data_server, 1, req, res)
+      iex> :ok = Modbuzz.start_rtu_server(:server, "ttyUSB0", [speed: 9600], :data_server)
+  """
   @spec start_rtu_server(
           name :: server(),
           device_name :: String.t(),

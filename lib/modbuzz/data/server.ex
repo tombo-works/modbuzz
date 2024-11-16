@@ -5,10 +5,9 @@ defmodule Modbuzz.Data.Server do
 
   import Modbuzz, only: [is_unit_id: 1]
 
-  @spec create_unit(Modbuzz.data_server(), Modbuzz.unit_id(), map()) ::
-          :ok | {:error, :already_started}
-  def create_unit(name, unit_id, initial_data \\ %{}) do
-    GenServer.call(name, {:create_unit, unit_id, initial_data})
+  @spec create_unit(Modbuzz.data_server(), Modbuzz.unit_id()) :: :ok | {:error, :already_created}
+  def create_unit(name, unit_id) do
+    GenServer.call(name, {:create_unit, unit_id})
   end
 
   @spec upsert(
@@ -73,10 +72,10 @@ defmodule Modbuzz.Data.Server do
     end
   end
 
-  def handle_call({:create_unit, unit_id, initial_data}, _from, state) do
-    case Modbuzz.Data.UnitSupervisor.create_unit(state.name, unit_id, initial_data) do
+  def handle_call({:create_unit, unit_id}, _from, state) do
+    case Modbuzz.Data.UnitSupervisor.create_unit(state.name, unit_id) do
       {:ok, _pid} -> {:reply, :ok, state}
-      {:error, {:already_started, _pid}} -> {:reply, {:error, :already_started}, state}
+      {:error, {:already_started, _pid}} -> {:reply, {:error, :already_created}, state}
     end
   end
 

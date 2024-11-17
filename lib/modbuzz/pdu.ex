@@ -3,11 +3,7 @@ defmodule Modbuzz.PDU do
 
   @illegal_data_address 0x02
 
-  defdelegate encode_request!(struct), to: Modbuzz.PDU.Protocol, as: :encode
-  defdelegate encode_response!(struct), to: Modbuzz.PDU.Protocol, as: :encode
-
-  def encode_request(struct), do: {:ok, Modbuzz.PDU.Protocol.encode(struct)}
-  def encode_response(struct), do: {:ok, Modbuzz.PDU.Protocol.encode(struct)}
+  defdelegate encode(struct), to: Modbuzz.PDU.Protocol, as: :encode
 
   for {modbus_function_code, modbus_function} <- Modbuzz.MixProject.pdu_seed() do
     req_module = Module.concat([Modbuzz.PDU, modbus_function, Req])

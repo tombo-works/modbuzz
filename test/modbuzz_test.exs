@@ -207,7 +207,7 @@ defmodule ModbuzzTest do
 
       response_binary =
         response
-        |> Modbuzz.PDU.encode_response!()
+        |> Modbuzz.PDU.encode()
         |> Modbuzz.RTU.ADU.new(1)
         |> Modbuzz.RTU.ADU.encode()
 
@@ -260,7 +260,7 @@ defmodule ModbuzzTest do
       # NOTE: Simulating an RTU client request to the RTU server
       request_binary =
         request
-        |> Modbuzz.PDU.encode_request!()
+        |> Modbuzz.PDU.encode()
         |> Modbuzz.RTU.ADU.new(1)
         |> Modbuzz.RTU.ADU.encode()
 

@@ -7,8 +7,6 @@ defmodule Modbuzz.RTU.Client.Receiver do
   alias Modbuzz.RTU.ADU
   alias Modbuzz.RTU.Log
 
-  @server_device_failure 0x04
-  @server_device_busy 0x06
   @unit_id_max 247
 
   defguardp is_valid_unit_id(unit_id) when unit_id >= 0 and unit_id <= @unit_id_max
@@ -66,7 +64,7 @@ defmodule Modbuzz.RTU.Client.Receiver do
       {:reply, :ok, %{state | callers: callers}}
     else
       {:ok, req} = PDU.decode_request(adu.pdu)
-      err = PDU.to_error(req, @server_device_busy)
+      err = PDU.to_error(req, :server_device_busy)
       GenServer.reply(to, {:error, err})
 
       {:noreply, state}
@@ -85,7 +83,7 @@ defmodule Modbuzz.RTU.Client.Receiver do
       Log.error("RTU server didn't respond.", nil, state)
       # treat as server device failure
       {:ok, req} = PDU.decode_request(adu.pdu)
-      err = PDU.to_error(req, @server_device_failure)
+      err = PDU.to_error(req, :server_device_failure)
       GenServer.reply(caller, {:error, err})
 
       callers = List.replace_at(callers, adu.unit_id, nil)

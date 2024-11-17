@@ -63,15 +63,9 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
   end
 
   defp request(data_source, unit_id, request, timeout) do
-    try do
-      case GenServer.call(data_source, {:call, unit_id, request, timeout}) do
-        {:ok, response} -> response
-        {:error, error} -> error
-      end
-    catch
-      :exit, {:noproc, mfa} ->
-        Log.error("`#{data_source}` not found. (mfa is #{inspect(mfa)})")
-        Modbuzz.PDU.to_error(request)
+    case GenServer.call(data_source, {:call, unit_id, request, timeout}) do
+      {:ok, response} -> response
+      {:error, error} -> error
     end
   end
 end

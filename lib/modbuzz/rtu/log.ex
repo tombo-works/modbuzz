@@ -3,16 +3,8 @@ defmodule Modbuzz.RTU.Log do
 
   require Logger
 
-  def error(what_happend) do
-    Logger.error(what_happend)
-  end
-
   def error(what_happend, reason, state) do
     Logger.error(what_happend <> why(reason) <> where(state))
-  end
-
-  def warning(what_happend) do
-    Logger.warning(what_happend)
   end
 
   def warning(what_happend, reason, state) do

@@ -35,9 +35,12 @@ defmodule Modbuzz.RTU.Client.Receiver do
     GenServer.start_link(__MODULE__, args, name: name(client_name))
   end
 
-  def init(_args) do
+  def init(args) do
+    device_name = Keyword.fetch!(args, :device_name)
+
     {:ok,
      %{
+       device_name: device_name,
        callers: List.duplicate(nil, @unit_id_max + 1),
        binary: <<>>
      }}
@@ -79,7 +82,7 @@ defmodule Modbuzz.RTU.Client.Receiver do
       # already responded
       {:noreply, state}
     else
-      Log.error("RTU server didn't respond.")
+      Log.error("RTU server didn't respond.", nil, state)
       # treat as server device failure
       {:ok, req} = PDU.decode_request(adu.pdu)
       err = PDU.to_error(req, @server_device_failure)
@@ -110,7 +113,7 @@ defmodule Modbuzz.RTU.Client.Receiver do
         {:noreply, %{state | binary: new_binary}}
 
       {:error, %ADU{unit_id: unit_id, pdu: _pdu, crc_valid?: false} = adu} ->
-        Log.warning("CRC error detected, #{inspect(adu)}.")
+        Log.warning("CRC error detected, #{inspect(adu)}.", nil, state)
         caller = Enum.fetch!(callers, unit_id)
         if not is_nil(caller), do: GenServer.reply(caller, {:error, :crc_error})
 

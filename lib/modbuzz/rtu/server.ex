@@ -27,9 +27,11 @@ defmodule Modbuzz.RTU.Server do
     {:ok,
      %{
        transport: transport,
-       transport_pid: transport_pid,
+       transport_opts: transport_opts,
+       device_name: device_name,
        data_source: data_source,
        timeout: timeout,
+       transport_pid: transport_pid,
        binary: <<>>
      }}
   end
@@ -60,7 +62,7 @@ defmodule Modbuzz.RTU.Server do
         {:noreply, %{state | binary: new_binary}}
 
       {:error, %ADU{unit_id: _unit_id, pdu: _pdu, crc_valid?: false} = adu} ->
-        Log.warning("CRC error detected, #{inspect(adu)}.")
+        Log.warning("CRC error detected, #{inspect(adu)}.", nil, state)
         # ignore request
         {:noreply, %{state | binary: <<>>}}
     end

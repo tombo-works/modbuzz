@@ -1,8 +1,6 @@
 defmodule Modbuzz.PDU do
   @moduledoc false
 
-  @illegal_data_address 0x02
-
   defdelegate encode(struct), to: Modbuzz.PDU.Protocol, as: :encode
 
   for {modbus_function_code, modbus_function} <- Modbuzz.MixProject.pdu_seed() do
@@ -40,7 +38,13 @@ defmodule Modbuzz.PDU do
   def request_length(<<_, _rest::binary>>), do: {:error, :unknown}
   def response_length(<<_, _rest::binary>>), do: {:error, :unknown}
 
-  def to_error(%req{}, exception_code \\ @illegal_data_address) do
+  def to_error(%req{}, exception_code) do
+    exception_code =
+      case exception_code do
+        :server_device_failure -> 0x04
+        :server_device_busy -> 0x06
+      end
+
     Module.split(req)
     |> List.replace_at(-1, "Err")
     |> Module.concat()

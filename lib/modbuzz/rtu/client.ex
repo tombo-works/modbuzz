@@ -7,8 +7,6 @@ defmodule Modbuzz.RTU.Client do
   alias Modbuzz.RTU.ADU
   alias Modbuzz.RTU.Client.Receiver
 
-  @server_device_busy 0x06
-
   def call(name, unit_id, request, timeout \\ 5000) do
     GenServer.call(name, {:call, unit_id, request, timeout}, timeout + 10)
   end
@@ -48,7 +46,7 @@ defmodule Modbuzz.RTU.Client do
     adu = PDU.encode(request) |> ADU.new(unit_id)
 
     if Receiver.busy_with?(receiver, adu) do
-      err = PDU.to_error(request, @server_device_busy)
+      err = PDU.to_error(request, :server_device_busy)
 
       {:reply, {:error, err}, state}
     else

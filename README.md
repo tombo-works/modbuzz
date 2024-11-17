@@ -140,15 +140,15 @@ Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_do
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/modbuzz>.
 
-## MODBUS References
-
-- WEB: https://modbus.org/
-  - PDF: [MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3](https://modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf)
-  - PDF: [MODBUS MESSAGING ON TCP/IP IMPLEMENTATION GUIDE V1.0b](https://modbus.org/docs/Modbus_Messaging_Implementation_Guide_V1_0b.pdf)
-
 ## License
 
 This project is licensed under the Apache-2.0 license.
 
 And this project follows the REUSE compliance.
 For more details, see the [REUSE SOFTWARE](https://reuse.software/).
+
+## MODBUS References
+
+- WEB: https://modbus.org/
+  - PDF: [MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3](https://modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf)
+  - PDF: [MODBUS MESSAGING ON TCP/IP IMPLEMENTATION GUIDE V1.0b](https://modbus.org/docs/Modbus_Messaging_Implementation_Guide_V1_0b.pdf)

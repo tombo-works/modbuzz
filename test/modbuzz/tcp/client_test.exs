@@ -513,7 +513,7 @@ defmodule Modbuzz.TCP.ClientTest do
     else
       %Modbuzz.PDU.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
     end
-    |> Modbuzz.PDU.encode_response!()
+    |> Modbuzz.PDU.encode()
     |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
     |> Modbuzz.TCP.ADU.encode()
   end
@@ -524,7 +524,7 @@ defmodule Modbuzz.TCP.ClientTest do
     else
       %Modbuzz.PDU.WriteSingleCoil.Res{output_address: 0x0016, output_value: true}
     end
-    |> Modbuzz.PDU.encode_response!()
+    |> Modbuzz.PDU.encode()
     |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
     |> Modbuzz.TCP.ADU.encode()
   end

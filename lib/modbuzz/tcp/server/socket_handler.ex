@@ -42,7 +42,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
           {:ok, request} = Modbuzz.PDU.decode_request(adu.pdu)
 
           request(data_source, adu.unit_id, request, timeout)
-          |> Modbuzz.PDU.encode_response!()
+          |> Modbuzz.PDU.encode()
           |> Modbuzz.TCP.ADU.new(adu.transaction_id, adu.unit_id)
           |> Modbuzz.TCP.ADU.encode()
         end

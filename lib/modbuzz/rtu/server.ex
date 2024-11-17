@@ -51,7 +51,7 @@ defmodule Modbuzz.RTU.Server do
       {:ok, request} = PDU.decode_request(pdu)
 
       request(data_source, unit_id, request)
-      |> Modbuzz.PDU.encode_response!()
+      |> Modbuzz.PDU.encode()
       |> Modbuzz.RTU.ADU.new(unit_id)
       |> Modbuzz.RTU.ADU.encode()
       |> then(&transport.write(transport_pid, &1))

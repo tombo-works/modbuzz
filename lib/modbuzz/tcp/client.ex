@@ -138,7 +138,7 @@ defmodule Modbuzz.TCP.Client do
     %{transport: transport, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -178,7 +178,7 @@ defmodule Modbuzz.TCP.Client do
     } = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -209,7 +209,7 @@ defmodule Modbuzz.TCP.Client do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -252,7 +252,7 @@ defmodule Modbuzz.TCP.Client do
     } = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode_request!(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 

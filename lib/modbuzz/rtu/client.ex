@@ -45,7 +45,7 @@ defmodule Modbuzz.RTU.Client do
       receiver: receiver
     } = state
 
-    adu = PDU.encode_request!(request) |> ADU.new(unit_id)
+    adu = PDU.encode(request) |> ADU.new(unit_id)
 
     if Receiver.busy_with?(receiver, adu) do
       err = PDU.to_error(request, @server_device_busy)

@@ -10,8 +10,8 @@ defmodule Modbuzz.TCP.Client do
     defstruct [:unit_id, :request, :from_pid, :sent_time]
   end
 
-  alias Modbuzz.TCP.ADU
   alias Modbuzz.PDU
+  alias Modbuzz.TCP.ADU
 
   @doc """
   Starts a #{__MODULE__} GenServer process linked to the current process.

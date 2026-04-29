@@ -26,6 +26,11 @@ defmodule Modbuzz.RTU.ServerTest do
     setup do
       Modbuzz.start_data_server(:data_server)
 
+      on_exit(fn ->
+        :ok = Application.stop(:modbuzz)
+        :ok = Application.start(:modbuzz)
+      end)
+
       unit_id = 0x01
       request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 2}
       response = %Modbuzz.PDU.ReadCoils.Res{coil_status: [true, false]}

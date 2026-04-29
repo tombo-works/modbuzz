@@ -3,7 +3,7 @@ defmodule Modbuzz.MixProject do
 
   @source_url "https://github.com/tombo-works/modbuzz"
 
-  def project do
+  def project() do
     [
       app: :modbuzz,
       version: "0.2.0",
@@ -12,12 +12,13 @@ defmodule Modbuzz.MixProject do
       deps: deps(),
       consolidate_protocols: Mix.env() != :test,
       test_coverage: test_coverage(),
-      dialyzer: dialyzer()
+      dialyzer: dialyzer(),
+      aliases: aliases()
     ] ++ hex() ++ docs()
   end
 
   # Run "mix help compile.app" to learn about applications.
-  def application do
+  def application() do
     [
       mod: {Modbuzz.Application, []},
       extra_applications:
@@ -26,6 +27,12 @@ defmodule Modbuzz.MixProject do
             :host -> [:runtime_tools, :wx, :observer]
             _ -> []
           end
+    ]
+  end
+
+  def cli() do
+    [
+      preferred_envs: [precommit: :test]
     ]
   end
 
@@ -44,7 +51,7 @@ defmodule Modbuzz.MixProject do
   end
 
   # Run "mix help deps" to learn about dependencies.
-  defp deps do
+  defp deps() do
     [
       {:circuits_uart, "~> 1.5"},
       {:cerlc, "~> 0.2.0"},
@@ -96,6 +103,19 @@ defmodule Modbuzz.MixProject do
           for {_modbus_function_code, modbus_function} <- pdu_seed() do
             Module.concat([Modbuzz.PDU, modbus_function])
           end
+      ]
+    ]
+  end
+
+  defp aliases() do
+    [
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "test",
+        "credo",
+        "dialyzer"
       ]
     ]
   end

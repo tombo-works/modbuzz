@@ -13,7 +13,7 @@ path = [
   ".fwatch.sh",
   ".github/**",
   ".gitignore",
-  ".tool-versions",
+  "mise.toml",
   "REUSE.toml",
   "mix.lock",
 ]

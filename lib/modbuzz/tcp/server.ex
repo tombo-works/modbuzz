@@ -73,6 +73,17 @@ defmodule Modbuzz.TCP.Server do
 
   defp gen_tcp_listen(state) do
     %{transport: transport, address: address, port: port, active: active} = state
-    transport.listen(port, ip: address, mode: :binary, packet: :raw, active: active)
+
+    transport.listen(port,
+      ip: address,
+      mode: :binary,
+      packet: :raw,
+      active: active,
+      backlog: 1024,
+      nodelay: true,
+      send_timeout: 30_000,
+      send_timeout_close: true,
+      reuseaddr: true
+    )
   end
 end

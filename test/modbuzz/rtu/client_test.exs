@@ -11,7 +11,6 @@ defmodule Modbuzz.RTU.ClientTest do
       Modbuzz.RTU.TransportMock
       |> expect(:start_link, fn [] -> {:ok, self()} end)
       |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
-      |> expect(:controlling_process, fn _transport_pid, _pid -> :ok end)
 
       assert {:ok, _pid} =
                Modbuzz.RTU.Client.start_link(

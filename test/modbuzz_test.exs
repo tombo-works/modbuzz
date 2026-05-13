@@ -184,11 +184,10 @@ defmodule ModbuzzTest do
       Modbuzz.RTU.TransportMock
       |> expect(:start_link, fn [] -> {:ok, self()} end)
       |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
-      |> expect(:controlling_process, fn _transport_pid, _pid -> :ok end)
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
-      {:ok, _pid} =
-        start_supervised(
+      _pid =
+        start_supervised!(
           {Modbuzz.RTU.ClientSupervisor,
            [name: :rtu_client, transport: Modbuzz.RTU.TransportMock, device_name: "ttyTEST"]},
           restart: :temporary
@@ -199,7 +198,7 @@ defmodule ModbuzzTest do
 
       task = Task.async(fn -> Modbuzz.request(:tcp_client, 1, request) end)
 
-      pid = Modbuzz.RTU.Client.Receiver.pid(:rtu_client)
+      pid = GenServer.whereis(:rtu_client)
 
       response_binary =
         response

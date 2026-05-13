@@ -5,11 +5,9 @@ defmodule Modbuzz.RTU.Client do
 
   alias Modbuzz.PDU
   alias Modbuzz.RTU.ADU
-  alias Modbuzz.RTU.Client.Receiver
+  alias Modbuzz.RTU.Log
 
-  def call(name, unit_id, request, timeout \\ 5000) do
-    GenServer.call(name, {:call, unit_id, request, timeout}, timeout + 10)
-  end
+  @unit_id_max 247
 
   def start_link(args) do
     name = Keyword.fetch!(args, :name)
@@ -17,22 +15,20 @@ defmodule Modbuzz.RTU.Client do
   end
 
   def init(args) do
-    name = Keyword.fetch!(args, :name)
     transport = Keyword.get(args, :transport, Circuits.UART)
     transport_opts = Keyword.get(args, :transport_opts, []) ++ [active: true]
     device_name = Keyword.fetch!(args, :device_name)
 
-    receiver = Receiver.name(name)
-
     {:ok, transport_pid} = transport.start_link([])
     :ok = transport.open(transport_pid, device_name, transport_opts)
-    :ok = transport.controlling_process(transport_pid, GenServer.whereis(receiver))
 
     {:ok,
      %{
        transport: transport,
+       device_name: device_name,
        transport_pid: transport_pid,
-       receiver: receiver
+       callers: List.duplicate(nil, @unit_id_max + 1),
+       binary: <<>>
      }}
   end
 
@@ -40,27 +36,75 @@ defmodule Modbuzz.RTU.Client do
     %{
       transport: transport,
       transport_pid: transport_pid,
-      receiver: receiver
+      callers: callers
     } = state
 
     adu = PDU.encode(request) |> ADU.new(unit_id)
+    caller = Enum.fetch!(callers, adu.unit_id)
 
-    if Receiver.busy_with?(receiver, adu) do
-      err = PDU.to_error(request, :server_device_busy)
+    if is_nil(caller) do
+      Process.send_after(self(), {:no_response?, adu}, timeout)
+      binary = ADU.encode(adu)
 
-      {:reply, {:error, err}, state}
+      transport.write(transport_pid, binary, timeout)
+
+      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, from)}}
     else
-      to = from
+      error = PDU.to_error(request, :server_device_busy)
 
-      case Receiver.will_respond(receiver, to, adu, timeout) do
-        :ok ->
-          binary = ADU.encode(adu)
-          transport.write(transport_pid, binary, timeout)
-          {:noreply, state}
+      {:reply, {:error, error}, state}
+    end
+  end
 
-        {:error, reason} ->
-          {:reply, {:error, reason}, state}
+  def handle_info({:no_response?, adu}, state) do
+    %{callers: callers} = state
+
+    caller = Enum.fetch!(callers, adu.unit_id)
+
+    if is_nil(caller) do
+      # already responded
+      {:noreply, state}
+    else
+      Log.error("RTU server didn't respond.", nil, state)
+      # treat as server device failure
+      {:ok, req} = PDU.decode_request(adu.pdu)
+      error = PDU.to_error(req, :server_device_failure)
+
+      GenServer.reply(caller, {:error, error})
+
+      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, nil), binary: <<>>}}
+    end
+  end
+
+  def handle_info({:circuits_uart, _device_name, binary}, state) do
+    %{callers: callers} = state
+
+    new_binary = state.binary <> binary
+
+    # NOTE: unit_id: 1, functions_code: 1, crc: 2, so at least 4 bytes
+    with true <- byte_size(new_binary) > 4 || {:error, :binary_is_short},
+         {:ok, %ADU{unit_id: unit_id, pdu: pdu}} <- ADU.decode_response(new_binary) do
+      res_tuple = PDU.decode_response(pdu)
+      caller = Enum.fetch!(callers, unit_id)
+
+      if not is_nil(caller) do
+        GenServer.reply(caller, res_tuple)
       end
+
+      {:noreply, %{state | callers: List.replace_at(callers, unit_id, nil), binary: <<>>}}
+    else
+      {:error, :binary_is_short} ->
+        {:noreply, %{state | binary: new_binary}}
+
+      {:error, %ADU{unit_id: unit_id, pdu: _pdu, crc_valid?: false} = adu} ->
+        Log.warning("CRC error detected, #{inspect(adu)}.", nil, state)
+        caller = Enum.fetch!(callers, unit_id)
+
+        if not is_nil(caller) do
+          GenServer.reply(caller, {:error, :crc_error})
+        end
+
+        {:noreply, %{state | callers: List.replace_at(callers, unit_id, nil), binary: <<>>}}
     end
   end
 end

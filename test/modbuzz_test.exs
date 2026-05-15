@@ -11,8 +11,12 @@ defmodule ModbuzzTest do
   setup :set_mox_global
 
   setup do
-    :ok = Application.stop(:modbuzz)
-    :ok = Application.start(:modbuzz)
+    on_exit(fn ->
+      :ok = Application.stop(:modbuzz)
+      :ok = Application.start(:modbuzz)
+    end)
+
+    :ok
   end
 
   describe "start_data_server/1" do

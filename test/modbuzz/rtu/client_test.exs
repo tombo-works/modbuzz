@@ -182,4 +182,39 @@ defmodule Modbuzz.RTU.ClientTest do
       refute_receive {:pid1_res, {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 6}}}
     end
   end
+
+  describe "terminate/2" do
+    setup do
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, fn [] -> {:ok, self()} end)
+      |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
+
+      name = :client
+      device_name = "ttyTEST"
+
+      # Use start_supervised! (not start_link_supervised!) so stopping the client with :shutdown
+      # does not propagate an exit signal to this test process.
+      _pid =
+        start_supervised!(
+          {Modbuzz.RTU.Client,
+           name: name, transport: Modbuzz.RTU.TransportMock, device_name: device_name},
+          restart: :temporary
+        )
+
+      %{name: name}
+    end
+
+    test "pending cast requester gets client_terminated", context do
+      Modbuzz.RTU.TransportMock
+      |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
+
+      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+
+      :ok = GenServer.cast(context.name, {:cast, 1, request, self(), 100})
+
+      :ok = GenServer.stop(context.name, :shutdown)
+
+      assert_receive {:modbuzz, :client, {:error, :client_terminated}}
+    end
+  end
 end

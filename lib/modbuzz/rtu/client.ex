@@ -34,6 +34,20 @@ defmodule Modbuzz.RTU.Client do
      }}
   end
 
+  def terminate(reason, state) do
+    %{
+      client_name: client_name,
+      callers: callers
+    } = state
+
+    Log.error("RTU client terminated, #{inspect(reason)}.", nil, state)
+
+    # All pending callers should be notified of the error
+    Enum.each(callers, fn caller ->
+      maybe_report_response(caller, client_name, {:error, :client_terminated})
+    end)
+  end
+
   def handle_call({:call, unit_id, request, timeout}, from, state) do
     %{
       transport: transport,

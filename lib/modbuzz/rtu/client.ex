@@ -64,7 +64,7 @@ defmodule Modbuzz.RTU.Client do
 
       :ok = transport.write(transport_pid, binary, timeout)
 
-      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, from)}}
+      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:call, from})}}
     else
       res_tuple = {:error, PDU.to_error(request, :server_device_busy)}
 
@@ -89,11 +89,11 @@ defmodule Modbuzz.RTU.Client do
 
       :ok = transport.write(transport_pid, binary, timeout)
 
-      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, pid)}}
+      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:cast, pid})}}
     else
       res_tuple = {:error, PDU.to_error(request, :server_device_busy)}
 
-      maybe_report_response(pid, client_name, res_tuple)
+      maybe_report_response({:cast, pid}, client_name, res_tuple)
 
       {:noreply, state}
     end
@@ -155,13 +155,11 @@ defmodule Modbuzz.RTU.Client do
   end
 
   defp maybe_report_response(caller, client_name, res_tuple) do
-    cond do
-      # for cast
-      is_pid(caller) -> send(caller, {:modbuzz, client_name, res_tuple})
-      # for call
-      is_tuple(caller) -> GenServer.reply(caller, res_tuple)
-      # for nil
-      true -> :noop
+    case caller do
+      nil -> :noop
+      {:cast, pid} when is_pid(pid) -> send(pid, {:modbuzz, client_name, res_tuple})
+      {:call, from} when is_tuple(from) -> GenServer.reply(from, res_tuple)
+      _ -> raise ArgumentError, "unexpected caller format: #{inspect(caller)}"
     end
   end
 end

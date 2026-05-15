@@ -153,7 +153,7 @@ defmodule Modbuzz do
   def start_rtu_client(name, device_name, transport_opts) do
     case DynamicSupervisor.start_child(
            Modbuzz.Application.client_supervisor_name(),
-           {Modbuzz.RTU.ClientSupervisor,
+           {Modbuzz.RTU.Client,
             [name: name, device_name: device_name, transport_opts: transport_opts]}
          ) do
       {:ok, _pid} -> :ok

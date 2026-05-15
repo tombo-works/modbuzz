@@ -188,7 +188,7 @@ defmodule ModbuzzTest do
 
       _pid =
         start_supervised!(
-          {Modbuzz.RTU.ClientSupervisor,
+          {Modbuzz.RTU.Client,
            [name: :rtu_client, transport: Modbuzz.RTU.TransportMock, device_name: "ttyTEST"]},
           restart: :temporary
         )

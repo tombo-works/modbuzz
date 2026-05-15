@@ -20,4 +20,61 @@ defmodule Modbuzz.RTU.ClientTest do
                )
     end
   end
+
+  describe "handle_call/3" do
+    setup do
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, fn [] -> {:ok, self()} end)
+      |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
+
+      name = :client
+
+      _pid =
+        start_link_supervised!(
+          {Modbuzz.RTU.Client,
+           name: name, transport: Modbuzz.RTU.TransportMock, device_name: "ttyTEST"},
+          restart: :temporary
+        )
+
+      %{name: name}
+    end
+
+    test "return :ok tuple", context do
+      Modbuzz.RTU.TransportMock
+      |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
+
+      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+
+      task = Task.async(fn -> GenServer.call(context.name, {:call, 1, request, 100}) end)
+
+      pid = GenServer.whereis(context.name)
+      Process.send_after(pid, {:circuits_uart, "ttyTest", <<0x01, 0x01, 0x00, 0x21, 0x90>>}, 10)
+
+      assert Task.await(task) == {:ok, %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}}
+    end
+
+    test "return :error tuple, no response", context do
+      Modbuzz.RTU.TransportMock
+      |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
+
+      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+
+      assert GenServer.call(context.name, {:call, 1, request, 100}) ==
+               {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 4}}
+    end
+
+    test "return :error tuple, crc error", context do
+      Modbuzz.RTU.TransportMock
+      |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
+
+      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+
+      task = Task.async(fn -> GenServer.call(context.name, {:call, 1, request, 100}) end)
+
+      pid = GenServer.whereis(context.name)
+      Process.send_after(pid, {:circuits_uart, "ttyTest", <<0x01, 0x01, 0x00, 0x00, 0x00>>}, 10)
+
+      assert Task.await(task) == {:error, :crc_error}
+    end
+  end
 end

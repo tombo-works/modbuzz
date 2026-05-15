@@ -54,13 +54,15 @@ defmodule Modbuzz.RTU.ServerTest do
       |> expect(:start_link, fn [] -> {:ok, self()} end)
       |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
 
+      device_name = "ttyTEST"
+
       {:ok, pid} =
         start_supervised(
           {Modbuzz.RTU.Server,
            [
              name: :server,
              transport: Modbuzz.RTU.TransportMock,
-             device_name: "ttyTEST",
+             device_name: device_name,
              data_source: :data_server
            ]},
           restart: :temporary
@@ -69,6 +71,7 @@ defmodule Modbuzz.RTU.ServerTest do
       %{
         request_binary: request_binary,
         response_binary: response_binary,
+        device_name: device_name,
         pid: pid
       }
     end
@@ -76,6 +79,7 @@ defmodule Modbuzz.RTU.ServerTest do
     test "handle request binary all at once", %{
       request_binary: request_binary,
       response_binary: response_binary,
+      device_name: device_name,
       pid: pid
     } do
       me = self()
@@ -86,7 +90,7 @@ defmodule Modbuzz.RTU.ServerTest do
         :ok
       end)
 
-      send(pid, {:circuits_uart, "ttyTest", request_binary})
+      send(pid, {:circuits_uart, device_name, request_binary})
 
       assert_receive ^response_binary
     end
@@ -94,6 +98,7 @@ defmodule Modbuzz.RTU.ServerTest do
     test "handle request binary in two parts", %{
       request_binary: request_binary,
       response_binary: response_binary,
+      device_name: device_name,
       pid: pid
     } do
       me = self()
@@ -106,8 +111,8 @@ defmodule Modbuzz.RTU.ServerTest do
 
       <<part1::binary-size(2), part2::binary>> = request_binary
 
-      send(pid, {:circuits_uart, "ttyTest", part1})
-      send(pid, {:circuits_uart, "ttyTest", part2})
+      send(pid, {:circuits_uart, device_name, part1})
+      send(pid, {:circuits_uart, device_name, part2})
 
       assert_receive ^response_binary
     end

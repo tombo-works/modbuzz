@@ -206,7 +206,7 @@ defmodule ModbuzzTest do
         |> Modbuzz.RTU.ADU.new(1)
         |> Modbuzz.RTU.ADU.encode()
 
-      Process.send_after(pid, {:circuits_uart, "ttyTest", response_binary}, 10)
+      Process.send_after(pid, {:circuits_uart, "ttyTEST", response_binary}, 10)
 
       assert Task.await(task) == {:ok, response}
     end
@@ -259,7 +259,7 @@ defmodule ModbuzzTest do
         |> Modbuzz.RTU.ADU.new(1)
         |> Modbuzz.RTU.ADU.encode()
 
-      Process.send_after(pid, {:circuits_uart, "ttyTest", request_binary}, 10)
+      Process.send_after(pid, {:circuits_uart, "ttyTEST", request_binary}, 10)
 
       # NOTE: Confirm that the RTU server has written the response
       receive do

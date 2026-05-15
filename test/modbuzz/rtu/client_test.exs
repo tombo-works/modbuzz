@@ -28,21 +28,26 @@ defmodule Modbuzz.RTU.ClientTest do
       |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
 
       name = :client
+      device_name = "ttyTEST"
 
       _pid =
         start_link_supervised!(
           {Modbuzz.RTU.Client,
-           name: name, transport: Modbuzz.RTU.TransportMock, device_name: "ttyTEST"},
+           name: name, transport: Modbuzz.RTU.TransportMock, device_name: device_name},
           restart: :temporary
         )
 
-      %{name: name}
+      %{name: name, device_name: device_name}
     end
 
     test "return :ok tuple", context do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout ->
-        send(context.name, {:circuits_uart, "ttyTest", <<0x01, 0x01, 0x00, 0x21, 0x90>>})
+        send(
+          context.name,
+          {:circuits_uart, context.device_name, <<0x01, 0x01, 0x00, 0x21, 0x90>>}
+        )
+
         :ok
       end)
 
@@ -66,7 +71,11 @@ defmodule Modbuzz.RTU.ClientTest do
     test "return :error tuple, crc error", context do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout ->
-        send(context.name, {:circuits_uart, "ttyTest", <<0x01, 0x01, 0x00, 0x00, 0x00>>})
+        send(
+          context.name,
+          {:circuits_uart, context.device_name, <<0x01, 0x01, 0x00, 0x00, 0x00>>}
+        )
+
         :ok
       end)
 
@@ -85,21 +94,26 @@ defmodule Modbuzz.RTU.ClientTest do
       |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
 
       name = :client
+      device_name = "ttyTEST"
 
       _pid =
         start_link_supervised!(
           {Modbuzz.RTU.Client,
-           name: name, transport: Modbuzz.RTU.TransportMock, device_name: "ttyTEST"},
+           name: name, transport: Modbuzz.RTU.TransportMock, device_name: device_name},
           restart: :temporary
         )
 
-      %{name: name}
+      %{name: name, device_name: device_name}
     end
 
     test "return :ok tuple", context do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout ->
-        send(context.name, {:circuits_uart, "ttyTest", <<0x01, 0x01, 0x00, 0x21, 0x90>>})
+        send(
+          context.name,
+          {:circuits_uart, context.device_name, <<0x01, 0x01, 0x00, 0x21, 0x90>>}
+        )
+
         :ok
       end)
 
@@ -126,7 +140,11 @@ defmodule Modbuzz.RTU.ClientTest do
     test "return :error tuple, crc error", context do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout ->
-        send(context.name, {:circuits_uart, "ttyTest", <<0x01, 0x01, 0x00, 0x00, 0x00>>})
+        send(
+          context.name,
+          {:circuits_uart, context.device_name, <<0x01, 0x01, 0x00, 0x00, 0x00>>}
+        )
+
         :ok
       end)
 

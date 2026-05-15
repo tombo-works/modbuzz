@@ -178,8 +178,8 @@ defmodule Modbuzz.RTU.ClientTest do
       GenServer.cast(context.name, {:cast, 1, request, pid2, 100})
 
       # Busy must be reported only to the second requester (pid2), not the first requester (pid1).
-      assert_receive {:pid2_res, {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 6}}}
-      refute_receive {:pid1_res, {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 6}}}
+      assert_receive {:pid2_res, {:error, :another_request_in_progress}}
+      refute_receive {:pid1_res, {:error, :another_request_in_progress}}
     end
   end
 

@@ -9,6 +9,8 @@ defmodule Modbuzz.RTU.Client do
 
   @unit_id_max 247
 
+  defguardp is_valid_unit_id(unit_id) when unit_id >= 0 and unit_id <= @unit_id_max
+
   def start_link(args) do
     name = Keyword.fetch!(args, :name)
     GenServer.start_link(__MODULE__, args, name: name)
@@ -48,7 +50,8 @@ defmodule Modbuzz.RTU.Client do
     end)
   end
 
-  def handle_call({:call, unit_id, request, timeout}, from, state) do
+  def handle_call({:call, unit_id, request, timeout}, from, state)
+      when is_valid_unit_id(unit_id) do
     %{
       transport: transport,
       transport_pid: transport_pid,
@@ -58,21 +61,23 @@ defmodule Modbuzz.RTU.Client do
     adu = PDU.encode(request) |> ADU.new(unit_id)
     caller = Enum.fetch!(callers, adu.unit_id)
 
-    if is_nil(caller) do
+    with true <- is_nil(caller) || {:error, :another_request_in_progress},
+         binary <- ADU.encode(adu),
+         :ok <- transport.write(transport_pid, binary, timeout) do
       Process.send_after(self(), {:no_response?, adu}, timeout)
-      binary = ADU.encode(adu)
-
-      :ok = transport.write(transport_pid, binary, timeout)
-
       {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:call, from})}}
     else
-      res_tuple = {:error, PDU.to_error(request, :server_device_busy)}
+      {:error, :another_request_in_progress} = res_tuple ->
+        {:reply, res_tuple, state}
 
-      {:reply, res_tuple, state}
+      {:error, reason} = res_tuple ->
+        Log.error("#{inspect(transport)} write error, #{inspect(reason)}.", nil, state)
+        {:reply, res_tuple, state}
     end
   end
 
-  def handle_cast({:cast, unit_id, request, pid, timeout}, state) when is_pid(pid) do
+  def handle_cast({:cast, unit_id, request, pid, timeout}, state)
+      when is_valid_unit_id(unit_id) and is_pid(pid) do
     %{
       client_name: client_name,
       transport: transport,
@@ -83,19 +88,20 @@ defmodule Modbuzz.RTU.Client do
     adu = PDU.encode(request) |> ADU.new(unit_id)
     caller = Enum.fetch!(callers, adu.unit_id)
 
-    if is_nil(caller) do
+    with true <- is_nil(caller) || {:error, :another_request_in_progress},
+         binary <- ADU.encode(adu),
+         :ok <- transport.write(transport_pid, binary, timeout) do
       Process.send_after(self(), {:no_response?, adu}, timeout)
-      binary = ADU.encode(adu)
-
-      :ok = transport.write(transport_pid, binary, timeout)
-
       {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:cast, pid})}}
     else
-      res_tuple = {:error, PDU.to_error(request, :server_device_busy)}
+      {:error, :another_request_in_progress} = res_tuple ->
+        maybe_report_response({:cast, pid}, client_name, res_tuple)
+        {:noreply, state}
 
-      maybe_report_response({:cast, pid}, client_name, res_tuple)
-
-      {:noreply, state}
+      {:error, reason} = res_tuple ->
+        Log.error("#{inspect(transport)} write error, #{inspect(reason)}.", nil, state)
+        maybe_report_response({:cast, pid}, client_name, res_tuple)
+        {:noreply, state}
     end
   end
 
@@ -118,7 +124,10 @@ defmodule Modbuzz.RTU.Client do
 
       maybe_report_response(caller, client_name, res_tuple)
 
-      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, nil), binary: <<>>}}
+      # Do not clear the shared buffer here.
+      # A timeout for one unit_id can happen while another unit_id is still receiving data.
+      # Clearing the buffer would drop that partial data.
+      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, nil)}}
     end
   end
 

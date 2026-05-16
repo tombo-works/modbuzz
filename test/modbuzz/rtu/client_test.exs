@@ -59,15 +59,14 @@ defmodule Modbuzz.RTU.ClientTest do
       assert Task.await(task) == {:ok, %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}}
     end
 
-    test "return :error tuple, no response", context do
+    test "return :error tuple, timeout", context do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
       unit_id = 1
       req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      assert GenServer.call(context.name, {:call, unit_id, req, 100}) ==
-               {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 4}}
+      assert GenServer.call(context.name, {:call, unit_id, req, 10}) == {:error, :timeout}
     end
 
     test "return :error tuple, crc error", context do
@@ -129,7 +128,7 @@ defmodule Modbuzz.RTU.ClientTest do
                       {:ok, %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}}}
     end
 
-    test "return :error tuple, no response", context do
+    test "return :error tuple, timeout", context do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
@@ -138,8 +137,7 @@ defmodule Modbuzz.RTU.ClientTest do
       unit_id = 1
       GenServer.cast(context.name, {:cast, unit_id, req, self(), 10})
 
-      assert_receive {:modbuzz, :client, ^unit_id, ^req,
-                      {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 4}}}
+      assert_receive {:modbuzz, :client, ^unit_id, ^req, {:error, :timeout}}
     end
 
     test "return :error tuple, crc error", context do

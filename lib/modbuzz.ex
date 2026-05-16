@@ -16,7 +16,7 @@ defmodule Modbuzz do
   @spec request(name :: client() | data_server(), unit_id(), request(), non_neg_integer()) ::
           {:ok, response()} | {:error, error()} | {:error, reason :: term()}
   def request(name, unit_id \\ 0, request, timeout \\ 5000) do
-    GenServer.call(name, {:call, unit_id, request, timeout})
+    GenServer.call(name, {:call, unit_id, request, timeout}, timeout + 50)
   end
 
   @doc "Create a unit under the data server."

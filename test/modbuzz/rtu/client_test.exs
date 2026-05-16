@@ -51,9 +51,10 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      unit_id = 1
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      task = Task.async(fn -> GenServer.call(context.name, {:call, 1, request, 100}) end)
+      task = Task.async(fn -> GenServer.call(context.name, {:call, unit_id, req, 100}) end)
 
       assert Task.await(task) == {:ok, %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}}
     end
@@ -62,9 +63,10 @@ defmodule Modbuzz.RTU.ClientTest do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      unit_id = 1
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      assert GenServer.call(context.name, {:call, 1, request, 100}) ==
+      assert GenServer.call(context.name, {:call, unit_id, req, 100}) ==
                {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 4}}
     end
 
@@ -79,9 +81,10 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      unit_id = 1
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      task = Task.async(fn -> GenServer.call(context.name, {:call, 1, request, 100}) end)
+      task = Task.async(fn -> GenServer.call(context.name, {:call, unit_id, req, 100}) end)
 
       assert Task.await(task) == {:error, :crc_error}
     end
@@ -117,11 +120,12 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      unit_id = 1
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      GenServer.cast(context.name, {:cast, 1, request, self(), 100})
+      GenServer.cast(context.name, {:cast, unit_id, req, self(), 100})
 
-      assert_receive {:modbuzz, :client,
+      assert_receive {:modbuzz, :client, ^unit_id, ^req,
                       {:ok, %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}}}
     end
 
@@ -129,12 +133,13 @@ defmodule Modbuzz.RTU.ClientTest do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      GenServer.cast(context.name, {:cast, 1, request, self(), 100})
+      unit_id = 1
+      GenServer.cast(context.name, {:cast, unit_id, req, self(), 10})
 
-      assert_receive {:modbuzz, :client, {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 4}}},
-                     500
+      assert_receive {:modbuzz, :client, ^unit_id, ^req,
+                      {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 4}}}
     end
 
     test "return :error tuple, crc error", context do
@@ -148,18 +153,20 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      GenServer.cast(context.name, {:cast, 1, request, self(), 100})
+      unit_id = 1
+      GenServer.cast(context.name, {:cast, unit_id, req, self(), 100})
 
-      assert_receive {:modbuzz, :client, {:error, :crc_error}}
+      assert_receive {:modbuzz, :client, ^unit_id, ^req, {:error, :crc_error}}
     end
 
     test "return :error tuple, server device busy", context do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      unit_id = 1
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
       me = self()
 
@@ -167,15 +174,15 @@ defmodule Modbuzz.RTU.ClientTest do
         for pid_res <- [:pid1_res, :pid2_res] do
           spawn(fn ->
             receive do
-              {:modbuzz, :client, res_tuple} -> send(me, {pid_res, res_tuple})
+              {:modbuzz, :client, ^unit_id, ^req, res_tuple} -> send(me, {pid_res, res_tuple})
             end
           end)
         end
 
       # First cast occupies unit_id: 1 with pid1
-      GenServer.cast(context.name, {:cast, 1, request, pid1, 100})
+      GenServer.cast(context.name, {:cast, unit_id, req, pid1, 100})
       # Second cast for the same unit_id should report busy to pid2
-      GenServer.cast(context.name, {:cast, 1, request, pid2, 100})
+      GenServer.cast(context.name, {:cast, unit_id, req, pid2, 100})
 
       # Busy must be reported only to the second requester (pid2), not the first requester (pid1).
       assert_receive {:pid2_res, {:error, :another_request_in_progress}}
@@ -208,13 +215,14 @@ defmodule Modbuzz.RTU.ClientTest do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      unit_id = 1
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      :ok = GenServer.cast(context.name, {:cast, 1, request, self(), 100})
+      :ok = GenServer.cast(context.name, {:cast, unit_id, req, self(), 100})
 
       :ok = GenServer.stop(context.name, :shutdown)
 
-      assert_receive {:modbuzz, :client, {:error, :client_terminated}}
+      assert_receive {:modbuzz, :client, ^unit_id, ^req, {:error, :client_terminated}}
     end
   end
 end

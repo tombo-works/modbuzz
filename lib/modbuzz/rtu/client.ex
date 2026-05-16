@@ -65,7 +65,7 @@ defmodule Modbuzz.RTU.Client do
          binary <- ADU.encode(adu),
          :ok <- transport.write(transport_pid, binary, timeout) do
       Process.send_after(self(), {:no_response?, adu}, timeout)
-      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:call, from})}}
+      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:call, adu, from})}}
     else
       {:error, :another_request_in_progress} = res_tuple ->
         {:reply, res_tuple, state}
@@ -92,15 +92,15 @@ defmodule Modbuzz.RTU.Client do
          binary <- ADU.encode(adu),
          :ok <- transport.write(transport_pid, binary, timeout) do
       Process.send_after(self(), {:no_response?, adu}, timeout)
-      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:cast, pid})}}
+      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:cast, adu, pid})}}
     else
       {:error, :another_request_in_progress} = res_tuple ->
-        maybe_report_response({:cast, pid}, client_name, res_tuple)
+        maybe_report_response({:cast, adu, pid}, client_name, res_tuple)
         {:noreply, state}
 
       {:error, reason} = res_tuple ->
         Log.error("#{inspect(transport)} write error, #{inspect(reason)}.", nil, state)
-        maybe_report_response({:cast, pid}, client_name, res_tuple)
+        maybe_report_response({:cast, adu, pid}, client_name, res_tuple)
         {:noreply, state}
     end
   end
@@ -164,10 +164,17 @@ defmodule Modbuzz.RTU.Client do
 
   defp maybe_report_response(caller, client_name, res_tuple) do
     case caller do
-      nil -> :noop
-      {:cast, pid} when is_pid(pid) -> send(pid, {:modbuzz, client_name, res_tuple})
-      {:call, from} when is_tuple(from) -> GenServer.reply(from, res_tuple)
-      _ -> raise ArgumentError, "unexpected caller format: #{inspect(caller)}"
+      nil ->
+        :noop
+
+      {:call, _adu, from} when is_tuple(from) ->
+        GenServer.reply(from, res_tuple)
+
+      {:cast, adu, pid} when is_pid(pid) ->
+        send(pid, {:modbuzz, client_name, adu.unit_id, adu.pdu, res_tuple})
+
+      _ ->
+        raise ArgumentError, "unexpected caller format: #{inspect(caller)}"
     end
   end
 end

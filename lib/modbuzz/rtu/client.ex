@@ -58,7 +58,7 @@ defmodule Modbuzz.RTU.Client do
       callers: callers
     } = state
 
-    adu = PDU.encode(request) |> ADU.new(unit_id)
+    adu = ADU.new(request, unit_id)
     caller = Enum.fetch!(callers, adu.unit_id)
 
     with true <- is_nil(caller) || {:error, :another_request_in_progress},
@@ -85,7 +85,7 @@ defmodule Modbuzz.RTU.Client do
       callers: callers
     } = state
 
-    adu = PDU.encode(request) |> ADU.new(unit_id)
+    adu = ADU.new(request, unit_id)
     caller = Enum.fetch!(callers, adu.unit_id)
 
     with true <- is_nil(caller) || {:error, :another_request_in_progress},
@@ -119,8 +119,7 @@ defmodule Modbuzz.RTU.Client do
     else
       Log.error("RTU server didn't respond.", nil, state)
       # treat as server device failure
-      {:ok, req} = PDU.decode_request(adu.pdu)
-      res_tuple = {:error, PDU.to_error(req, :server_device_failure)}
+      res_tuple = {:error, PDU.to_error(adu.pdu, :server_device_failure)}
 
       maybe_report_response(caller, client_name, res_tuple)
 
@@ -142,7 +141,7 @@ defmodule Modbuzz.RTU.Client do
     # NOTE: unit_id: 1, functions_code: 1, crc: 2, so at least 4 bytes
     with true <- byte_size(new_binary) > 4 || {:error, :binary_is_short},
          {:ok, %ADU{unit_id: unit_id, pdu: pdu}} <- ADU.decode_response(new_binary) do
-      res_tuple = PDU.decode_response(pdu)
+      res_tuple = {:ok, pdu}
       caller = Enum.fetch!(callers, unit_id)
 
       maybe_report_response(caller, client_name, res_tuple)

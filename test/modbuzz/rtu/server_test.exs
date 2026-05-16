@@ -40,13 +40,11 @@ defmodule Modbuzz.RTU.ServerTest do
 
       request_binary =
         request
-        |> Modbuzz.PDU.encode()
         |> Modbuzz.RTU.ADU.new(unit_id)
         |> Modbuzz.RTU.ADU.encode()
 
       response_binary =
         response
-        |> Modbuzz.PDU.encode()
         |> Modbuzz.RTU.ADU.new(unit_id)
         |> Modbuzz.RTU.ADU.encode()
 

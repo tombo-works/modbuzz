@@ -206,7 +206,6 @@ defmodule ModbuzzTest do
 
       response_binary =
         response
-        |> Modbuzz.PDU.encode()
         |> Modbuzz.RTU.ADU.new(1)
         |> Modbuzz.RTU.ADU.encode()
 
@@ -259,7 +258,6 @@ defmodule ModbuzzTest do
       # NOTE: Simulating an RTU client request to the RTU server
       request_binary =
         request
-        |> Modbuzz.PDU.encode()
         |> Modbuzz.RTU.ADU.new(1)
         |> Modbuzz.RTU.ADU.encode()
 
@@ -269,7 +267,7 @@ defmodule ModbuzzTest do
       receive do
         binary ->
           {:ok, adu} = Modbuzz.RTU.ADU.decode_response(binary)
-          assert Modbuzz.PDU.decode_response(adu.pdu) == {:ok, response}
+          assert adu.pdu == response
       end
     end
   end

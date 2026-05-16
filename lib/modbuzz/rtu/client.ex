@@ -3,7 +3,6 @@ defmodule Modbuzz.RTU.Client do
 
   use GenServer
 
-  alias Modbuzz.PDU
   alias Modbuzz.RTU.ADU
   alias Modbuzz.RTU.Log
 
@@ -117,9 +116,8 @@ defmodule Modbuzz.RTU.Client do
       # already responded
       {:noreply, state}
     else
-      Log.error("RTU server didn't respond.", nil, state)
-      # treat as server device failure
-      res_tuple = {:error, PDU.to_error(adu.pdu, :server_device_failure)}
+      Log.error("RTU server didn't respond for #{inspect(adu)}.", nil, state)
+      res_tuple = {:error, :timeout}
 
       maybe_report_response(caller, client_name, res_tuple)
 

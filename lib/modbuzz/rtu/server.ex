@@ -3,7 +3,6 @@ defmodule Modbuzz.RTU.Server do
 
   use GenServer
 
-  alias Modbuzz.PDU
   alias Modbuzz.RTU.ADU
   alias Modbuzz.RTU.Log
 
@@ -48,10 +47,7 @@ defmodule Modbuzz.RTU.Server do
     # NOTE: unit_id: 1, functions_code: 1, crc: 2, so at least 4 bytes
     with true <- byte_size(new_binary) > 4 || {:error, :binary_is_short},
          {:ok, %ADU{unit_id: unit_id, pdu: pdu}} <- ADU.decode_request(new_binary) do
-      {:ok, request} = PDU.decode_request(pdu)
-
-      request(data_source, unit_id, request)
-      |> Modbuzz.PDU.encode()
+      request(data_source, unit_id, pdu)
       |> Modbuzz.RTU.ADU.new(unit_id)
       |> Modbuzz.RTU.ADU.encode()
       |> then(&transport.write(transport_pid, &1))

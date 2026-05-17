@@ -147,22 +147,39 @@ defmodule Modbuzz.RTU.Client do
 
     new_binary = state.binary <> binary
 
-    # NOTE: unit_id: 1, functions_code: 1, crc: 2, so at least 4 bytes
-    with true <- byte_size(new_binary) > 4 || {:error, :binary_is_short},
-         {:ok, %ADU{unit_id: unit_id, pdu: pdu}} <- ADU.decode_response(new_binary) do
-      res_tuple = {:ok, pdu}
-      req = Map.get(reqs, unit_id)
+    case ADU.decode_response(new_binary) do
+      {:ok, %ADU{unit_id: unit_id, pdu: pdu}} ->
+        res_tuple = {:ok, pdu}
+        req = Map.get(reqs, unit_id)
 
-      maybe_report_response(req, client_name, res_tuple)
+        maybe_report_response(req, client_name, res_tuple)
 
-      {:noreply, %{state | reqs: Map.put(reqs, unit_id, nil), binary: <<>>}}
-    else
+        {:noreply, %{state | reqs: Map.put(reqs, unit_id, nil), binary: <<>>}}
+
       {:error, :binary_is_short} ->
         {:noreply, %{state | binary: new_binary}}
 
-      {:error, %ADU{unit_id: unit_id, pdu: _pdu, crc_valid?: false} = adu} ->
+      {:error, :unknown} ->
+        # No response is sent to the requester; the pending request will eventually time out.
+        Log.error("Failed to decode ADU, unknown binary format.", nil, state)
+        {:noreply, %{state | binary: <<>>}}
+
+      {:error, :binary_is_long} ->
+        # No response is sent to the requester; the pending request will eventually time out.
+        Log.error("Failed to decode ADU, binary is too long.", nil, state)
+        {:noreply, %{state | binary: <<>>}}
+
+      {:error, %ADU{unit_id: unit_id, crc_valid?: false} = adu} ->
         Log.warning("CRC error detected, #{inspect(adu)}.", nil, state)
         res_tuple = {:error, :crc_error}
+        req = Map.get(reqs, unit_id)
+
+        maybe_report_response(req, client_name, res_tuple)
+
+        {:noreply, %{state | reqs: Map.put(reqs, unit_id, nil), binary: <<>>}}
+
+      {:error, %ADU{unit_id: unit_id, pdu: pdu}} ->
+        res_tuple = {:error, pdu}
         req = Map.get(reqs, unit_id)
 
         maybe_report_response(req, client_name, res_tuple)

@@ -114,5 +114,58 @@ defmodule Modbuzz.RTU.ServerTest do
 
       assert_receive ^response_binary
     end
+
+    test "clears buffer and recovers on unknown function code binary", %{
+      request_binary: request_binary,
+      response_binary: response_binary,
+      device_name: device_name,
+      pid: pid
+    } do
+      me = self()
+
+      Modbuzz.RTU.TransportMock
+      |> expect(:write, fn _transport_pid, binary ->
+        send(me, binary)
+        :ok
+      end)
+
+      unit_id = <<0x01>>
+      unknown_function_code = <<0x00>>
+      fake_crc = <<0x00, 0x00>>
+
+      unknown_function_binary = unit_id <> unknown_function_code <> fake_crc
+
+      send(pid, {:circuits_uart, device_name, unknown_function_binary})
+      send(pid, {:circuits_uart, device_name, request_binary})
+
+      assert_receive ^response_binary
+    end
+
+    test "clears buffer and recovers on binary_is_long binary", %{
+      request_binary: request_binary,
+      response_binary: response_binary,
+      device_name: device_name,
+      pid: pid
+    } do
+      me = self()
+
+      Modbuzz.RTU.TransportMock
+      |> expect(:write, fn _transport_pid, binary ->
+        send(me, binary)
+        :ok
+      end)
+
+      unit_id = <<0x01>>
+      fixed_pdu = <<0x01, 0x00, 0x00, 0x00, 0x02>>
+      extra_byte = <<0xFF>>
+      fake_crc = <<0x00, 0x00>>
+
+      long_binary = unit_id <> fixed_pdu <> extra_byte <> fake_crc
+
+      send(pid, {:circuits_uart, device_name, long_binary})
+      send(pid, {:circuits_uart, device_name, request_binary})
+
+      assert_receive ^response_binary
+    end
   end
 end

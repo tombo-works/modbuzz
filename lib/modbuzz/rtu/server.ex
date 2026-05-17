@@ -44,22 +44,28 @@ defmodule Modbuzz.RTU.Server do
 
     new_binary = state.binary <> binary
 
-    # NOTE: unit_id: 1, functions_code: 1, crc: 2, so at least 4 bytes
-    with true <- byte_size(new_binary) > 4 || {:error, :binary_is_short},
-         {:ok, %ADU{unit_id: unit_id, pdu: pdu}} <- ADU.decode_request(new_binary) do
-      request(data_source, unit_id, pdu)
-      |> Modbuzz.RTU.ADU.new(unit_id)
-      |> Modbuzz.RTU.ADU.encode()
-      |> then(&transport.write(transport_pid, &1))
+    case ADU.decode_request(new_binary) do
+      {:ok, %ADU{unit_id: unit_id, pdu: pdu}} ->
+        request(data_source, unit_id, pdu)
+        |> Modbuzz.RTU.ADU.new(unit_id)
+        |> Modbuzz.RTU.ADU.encode()
+        |> then(&transport.write(transport_pid, &1))
 
-      {:noreply, %{state | binary: <<>>}}
-    else
+        {:noreply, %{state | binary: <<>>}}
+
       {:error, :binary_is_short} ->
         {:noreply, %{state | binary: new_binary}}
 
-      {:error, %ADU{unit_id: _unit_id, pdu: _pdu, crc_valid?: false} = adu} ->
+      {:error, :unknown} ->
+        Log.error("Failed to decode ADU, unknown binary format.", nil, state)
+        {:noreply, %{state | binary: <<>>}}
+
+      {:error, :binary_is_long} ->
+        Log.error("Failed to decode ADU, binary is too long.", nil, state)
+        {:noreply, %{state | binary: <<>>}}
+
+      {:error, %ADU{unit_id: _unit_id, crc_valid?: false} = adu} ->
         Log.warning("CRC error detected, #{inspect(adu)}.", nil, state)
-        # ignore request
         {:noreply, %{state | binary: <<>>}}
     end
   end

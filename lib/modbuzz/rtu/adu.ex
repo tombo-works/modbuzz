@@ -3,7 +3,11 @@ defmodule Modbuzz.RTU.ADU do
 
   alias Modbuzz.PDU
 
+  # unit_id: 1, functions_code: 1, crc: 2, so minimum frame length is 4
+  @min_frame_length 4
+
   @crc_defn :cerlc.init(:crc16_modbus)
+  @crc_length 2
 
   @type t :: %__MODULE__{unit_id: 0x00..0xF7, pdu: struct(), crc_valid?: boolean()}
   defstruct unit_id: 0x00, pdu: nil, crc_valid?: true
@@ -21,33 +25,58 @@ defmodule Modbuzz.RTU.ADU do
     binary <> crc(binary)
   end
 
+  def decode_request(binary) when is_binary(binary) and byte_size(binary) < @min_frame_length do
+    {:error, :binary_is_short}
+  end
+
   def decode_request(<<unit_id, binary::binary>>) do
     with {:ok, pdu_length} <- Modbuzz.PDU.request_length(binary),
-         <<pdu_binary::binary-size(pdu_length), crc::binary-size(2)>> <- binary do
-      if crc(<<unit_id, pdu_binary::binary>>) == crc do
-        {:ok, pdu} = PDU.decode_request(pdu_binary)
-        {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
-      else
-        {:ok, pdu} = PDU.decode_request(pdu_binary)
-        {:error, %__MODULE__{unit_id: unit_id, pdu: pdu, crc_valid?: false}}
-      end
+         true <- byte_size(binary) >= pdu_length + @crc_length || {:error, :binary_is_short},
+         <<pdu_binary::binary-size(pdu_length), crc::binary-size(@crc_length)>> <- binary,
+         true <- crc(<<unit_id, pdu_binary::binary>>) == crc || {:error, :crc_error},
+         {:ok, pdu} <- PDU.decode_request(pdu_binary) do
+      {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
     else
-      _ -> {:error, :binary_is_short}
+      {:error, :binary_is_short} ->
+        {:error, :binary_is_short}
+
+      {:error, :unknown} ->
+        {:error, :unknown}
+
+      long_binary when is_binary(long_binary) ->
+        {:error, :binary_is_long}
+
+      {:error, :crc_error} ->
+        {:error, %__MODULE__{unit_id: unit_id, crc_valid?: false}}
     end
+  end
+
+  def decode_response(binary) when is_binary(binary) and byte_size(binary) < @min_frame_length do
+    {:error, :binary_is_short}
   end
 
   def decode_response(<<unit_id, binary::binary>>) do
     with {:ok, pdu_length} <- Modbuzz.PDU.response_length(binary),
-         <<pdu_binary::binary-size(pdu_length), crc::binary-size(2)>> <- binary do
-      if crc(<<unit_id, pdu_binary::binary>>) == crc do
-        {:ok, pdu} = PDU.decode_response(pdu_binary)
-        {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
-      else
-        {:ok, pdu} = PDU.decode_response(pdu_binary)
-        {:error, %__MODULE__{unit_id: unit_id, pdu: pdu, crc_valid?: false}}
-      end
+         true <- byte_size(binary) >= pdu_length + @crc_length || {:error, :binary_is_short},
+         <<pdu_binary::binary-size(pdu_length), crc::binary-size(@crc_length)>> <- binary,
+         true <- crc(<<unit_id, pdu_binary::binary>>) == crc || {:error, :crc_error},
+         {:ok, pdu} <- PDU.decode_response(pdu_binary) do
+      {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
     else
-      _ -> {:error, :binary_is_short}
+      {:error, :unknown} ->
+        {:error, :unknown}
+
+      {:error, :binary_is_short} ->
+        {:error, :binary_is_short}
+
+      long_binary when is_binary(long_binary) ->
+        {:error, :binary_is_long}
+
+      {:error, :crc_error} ->
+        {:error, %__MODULE__{unit_id: unit_id, crc_valid?: false}}
+
+      {:error, pdu} when is_struct(pdu) ->
+        {:error, %__MODULE__{unit_id: unit_id, pdu: pdu}}
     end
   end
 

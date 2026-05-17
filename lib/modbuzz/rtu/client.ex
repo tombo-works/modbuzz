@@ -30,7 +30,7 @@ defmodule Modbuzz.RTU.Client do
        transport: transport,
        device_name: device_name,
        transport_pid: transport_pid,
-       callers: List.duplicate(nil, @unit_id_max + 1),
+       reqs: %{},
        binary: <<>>
      }}
   end
@@ -38,14 +38,14 @@ defmodule Modbuzz.RTU.Client do
   def terminate(reason, state) do
     %{
       client_name: client_name,
-      callers: callers
+      reqs: reqs
     } = state
 
     Log.error("RTU client terminated, #{inspect(reason)}.", nil, state)
 
-    # All pending callers should be notified of the error
-    Enum.each(callers, fn caller ->
-      maybe_report_response(caller, client_name, {:error, :client_terminated})
+    # All pending requests should be notified of the error
+    Enum.each(reqs, fn {_unit_id, req} ->
+      maybe_report_response(req, client_name, {:error, :client_terminated})
     end)
   end
 
@@ -54,17 +54,18 @@ defmodule Modbuzz.RTU.Client do
     %{
       transport: transport,
       transport_pid: transport_pid,
-      callers: callers
+      reqs: reqs
     } = state
 
+    req = Map.get(reqs, unit_id)
     adu = ADU.new(request, unit_id)
-    caller = Enum.fetch!(callers, adu.unit_id)
+    new_req = {:call, unit_id, request, from, make_ref()}
 
-    with true <- is_nil(caller) || {:error, :another_request_in_progress},
+    with true <- is_nil(req) || {:error, :another_request_in_progress},
          binary <- ADU.encode(adu),
          :ok <- transport.write(transport_pid, binary, timeout) do
-      Process.send_after(self(), {:no_response?, adu}, timeout)
-      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:call, adu, from})}}
+      Process.send_after(self(), {:timeout?, new_req}, timeout)
+      {:noreply, %{state | reqs: Map.put(reqs, adu.unit_id, new_req)}}
     else
       {:error, :another_request_in_progress} = res_tuple ->
         {:reply, res_tuple, state}
@@ -81,57 +82,67 @@ defmodule Modbuzz.RTU.Client do
       client_name: client_name,
       transport: transport,
       transport_pid: transport_pid,
-      callers: callers
+      reqs: reqs
     } = state
 
+    req = Map.get(reqs, unit_id)
     adu = ADU.new(request, unit_id)
-    caller = Enum.fetch!(callers, adu.unit_id)
+    new_req = {:cast, unit_id, request, pid, make_ref()}
 
-    with true <- is_nil(caller) || {:error, :another_request_in_progress},
+    with true <- is_nil(req) || {:error, :another_request_in_progress},
          binary <- ADU.encode(adu),
          :ok <- transport.write(transport_pid, binary, timeout) do
-      Process.send_after(self(), {:no_response?, adu}, timeout)
-      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, {:cast, adu, pid})}}
+      Process.send_after(self(), {:timeout?, new_req}, timeout)
+      {:noreply, %{state | reqs: Map.put(reqs, adu.unit_id, new_req)}}
     else
       {:error, :another_request_in_progress} = res_tuple ->
-        maybe_report_response({:cast, adu, pid}, client_name, res_tuple)
+        maybe_report_response(new_req, client_name, res_tuple)
         {:noreply, state}
 
       {:error, reason} = res_tuple ->
         Log.error("#{inspect(transport)} write error, #{inspect(reason)}.", nil, state)
-        maybe_report_response({:cast, adu, pid}, client_name, res_tuple)
+        maybe_report_response(new_req, client_name, res_tuple)
         {:noreply, state}
     end
   end
 
-  def handle_info({:no_response?, adu}, state) do
+  def handle_info({:timeout?, {_, unit_id, _, _, ref}}, state) do
     %{
       client_name: client_name,
-      callers: callers
+      reqs: reqs
     } = state
 
-    caller = Enum.fetch!(callers, adu.unit_id)
+    req = Map.get(reqs, unit_id)
 
-    if is_nil(caller) do
+    case req do
       # already responded
-      {:noreply, state}
-    else
-      Log.error("RTU server didn't respond for #{inspect(adu)}.", nil, state)
-      res_tuple = {:error, :timeout}
+      nil ->
+        {:noreply, state}
 
-      maybe_report_response(caller, client_name, res_tuple)
+      # timeout for the current request, report timeout error
+      {_, unit_id_, request_, _, ref_} = req_ when ref_ == ref ->
+        Log.error("RTU server didn't respond for #{inspect(request_)}.", nil, state)
+        res_tuple = {:error, :timeout}
 
-      # Do not clear the shared buffer here.
-      # A timeout for one unit_id can happen while another unit_id is still receiving data.
-      # Clearing the buffer would drop that partial data.
-      {:noreply, %{state | callers: List.replace_at(callers, adu.unit_id, nil)}}
+        maybe_report_response(req_, client_name, res_tuple)
+
+        # Do not clear the shared buffer here.
+        # A timeout for one unit_id can happen while another unit_id is still receiving data.
+        # Clearing the buffer would drop that partial data.
+        {:noreply, %{state | reqs: Map.put(reqs, unit_id_, nil)}}
+
+      # the current request is different, do not report timeout error
+      # this means the request that triggered this timeout message has already been responded to
+      # and a new request for the same unit_id has been sent after that
+      {_, _, _, _, ref_} when ref_ != ref ->
+        {:noreply, state}
     end
   end
 
   def handle_info({:circuits_uart, _device_name, binary}, state) do
     %{
       client_name: client_name,
-      callers: callers
+      reqs: reqs
     } = state
 
     new_binary = state.binary <> binary
@@ -140,11 +151,11 @@ defmodule Modbuzz.RTU.Client do
     with true <- byte_size(new_binary) > 4 || {:error, :binary_is_short},
          {:ok, %ADU{unit_id: unit_id, pdu: pdu}} <- ADU.decode_response(new_binary) do
       res_tuple = {:ok, pdu}
-      caller = Enum.fetch!(callers, unit_id)
+      req = Map.get(reqs, unit_id)
 
-      maybe_report_response(caller, client_name, res_tuple)
+      maybe_report_response(req, client_name, res_tuple)
 
-      {:noreply, %{state | callers: List.replace_at(callers, unit_id, nil), binary: <<>>}}
+      {:noreply, %{state | reqs: Map.put(reqs, unit_id, nil), binary: <<>>}}
     else
       {:error, :binary_is_short} ->
         {:noreply, %{state | binary: new_binary}}
@@ -152,27 +163,27 @@ defmodule Modbuzz.RTU.Client do
       {:error, %ADU{unit_id: unit_id, pdu: _pdu, crc_valid?: false} = adu} ->
         Log.warning("CRC error detected, #{inspect(adu)}.", nil, state)
         res_tuple = {:error, :crc_error}
-        caller = Enum.fetch!(callers, unit_id)
+        req = Map.get(reqs, unit_id)
 
-        maybe_report_response(caller, client_name, res_tuple)
+        maybe_report_response(req, client_name, res_tuple)
 
-        {:noreply, %{state | callers: List.replace_at(callers, unit_id, nil), binary: <<>>}}
+        {:noreply, %{state | reqs: Map.put(reqs, unit_id, nil), binary: <<>>}}
     end
   end
 
-  defp maybe_report_response(caller, client_name, res_tuple) do
-    case caller do
+  defp maybe_report_response(req, client_name, res_tuple) do
+    case req do
       nil ->
         :noop
 
-      {:call, _adu, from} when is_tuple(from) ->
+      {:call, _unit_id, _request, from, _ref} when is_tuple(from) ->
         GenServer.reply(from, res_tuple)
 
-      {:cast, adu, pid} when is_pid(pid) ->
-        send(pid, {:modbuzz, client_name, adu.unit_id, adu.pdu, res_tuple})
+      {:cast, unit_id, request, pid, _ref} when is_pid(pid) ->
+        send(pid, {:modbuzz, client_name, unit_id, request, res_tuple})
 
       _ ->
-        raise ArgumentError, "unexpected caller format: #{inspect(caller)}"
+        raise ArgumentError, "unexpected req format: #{inspect(req)}"
     end
   end
 end

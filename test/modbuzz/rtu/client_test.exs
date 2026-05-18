@@ -40,51 +40,53 @@ defmodule Modbuzz.RTU.ClientTest do
       %{name: name, device_name: device_name}
     end
 
-    test "return :ok tuple", context do
+    test "return :ok tuple", %{
+      name: name,
+      device_name: device_name
+    } do
+      unit_id = 0x01
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      res = %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}
+
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout ->
-        send(
-          context.name,
-          {:circuits_uart, context.device_name, <<0x01, 0x01, 0x00, 0x21, 0x90>>}
-        )
-
+        send(name, {:circuits_uart, device_name, to_binary(unit_id, res)})
         :ok
       end)
 
-      unit_id = 1
-      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
-
-      task = Task.async(fn -> GenServer.call(context.name, {:call, unit_id, req, 100}) end)
-
-      assert Task.await(task) == {:ok, %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}}
+      task = Task.async(fn -> GenServer.call(name, {:call, unit_id, req, 100}) end)
+      assert Task.await(task) == {:ok, res}
     end
 
-    test "return :error tuple, timeout", context do
+    test "return :error tuple, timeout", %{
+      name: name
+    } do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
-      unit_id = 1
+      unit_id = 0x01
       req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      assert GenServer.call(context.name, {:call, unit_id, req, 10}) == {:error, :timeout}
+      assert GenServer.call(name, {:call, unit_id, req, 10}) == {:error, :timeout}
     end
 
-    test "return :error tuple, crc error", context do
+    test "return :error tuple, crc error", %{
+      name: name,
+      device_name: device_name
+    } do
+      unit_id = 0x01
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      res = %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}
+
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout ->
-        send(
-          context.name,
-          {:circuits_uart, context.device_name, <<0x01, 0x01, 0x00, 0x00, 0x00>>}
-        )
-
+        <<binary_wo_crc::binary-size(3), _crc::binary-size(2)>> = to_binary(unit_id, res)
+        crc_error_binary = binary_wo_crc <> <<0x00, 0x00>>
+        send(name, {:circuits_uart, device_name, crc_error_binary})
         :ok
       end)
 
-      unit_id = 1
-      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
-
-      task = Task.async(fn -> GenServer.call(context.name, {:call, unit_id, req, 100}) end)
-
+      task = Task.async(fn -> GenServer.call(name, {:call, unit_id, req, 100}) end)
       assert Task.await(task) == {:error, :crc_error}
     end
 
@@ -127,10 +129,11 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      _task = Task.async(fn -> GenServer.call(name, {:call, _unit_id = 0x02, req, 100}) end)
+      task2 = Task.async(fn -> GenServer.call(name, {:call, _unit_id = 0x02, req, 10}) end)
+      task1 = Task.async(fn -> GenServer.call(name, {:call, unit_id, req, 100}) end)
 
-      task = Task.async(fn -> GenServer.call(name, {:call, unit_id, req, 100}) end)
-      assert Task.await(task) == {:ok, res}
+      assert Task.await(task1) == {:ok, res}
+      assert Task.await(task2) == {:error, :timeout}
     end
 
     test "clears buffer and recovers on binary_is_long binary", %{
@@ -153,10 +156,11 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      _task = Task.async(fn -> GenServer.call(name, {:call, _unit_id = 0x02, req, 100}) end)
+      task2 = Task.async(fn -> GenServer.call(name, {:call, _unit_id = 0x02, req, 10}) end)
+      task1 = Task.async(fn -> GenServer.call(name, {:call, unit_id, req, 10}) end)
 
-      task = Task.async(fn -> GenServer.call(name, {:call, unit_id, req, 100}) end)
-      assert Task.await(task) == {:ok, res}
+      assert Task.await(task1) == {:ok, res}
+      assert Task.await(task2) == {:error, :timeout}
     end
   end
 
@@ -179,63 +183,62 @@ defmodule Modbuzz.RTU.ClientTest do
       %{name: name, device_name: device_name}
     end
 
-    test "return :ok tuple", context do
+    test "return :ok tuple", %{
+      name: name,
+      device_name: device_name
+    } do
+      unit_id = 1
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      res = %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}
+
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout ->
-        send(
-          context.name,
-          {:circuits_uart, context.device_name, <<0x01, 0x01, 0x00, 0x21, 0x90>>}
-        )
-
+        send(name, {:circuits_uart, device_name, to_binary(unit_id, res)})
         :ok
       end)
 
+      GenServer.cast(name, {:cast, unit_id, req, self(), 100})
+      assert_receive {:modbuzz, :client, ^unit_id, ^req, {:ok, ^res}}
+    end
+
+    test "return :error tuple, timeout", %{
+      name: name
+    } do
       unit_id = 1
       req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      GenServer.cast(context.name, {:cast, unit_id, req, self(), 100})
-
-      assert_receive {:modbuzz, :client, ^unit_id, ^req,
-                      {:ok, %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}}}
-    end
-
-    test "return :error tuple, timeout", context do
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
-      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
-
-      unit_id = 1
-      GenServer.cast(context.name, {:cast, unit_id, req, self(), 10})
-
+      GenServer.cast(name, {:cast, unit_id, req, self(), 10})
       assert_receive {:modbuzz, :client, ^unit_id, ^req, {:error, :timeout}}
     end
 
-    test "return :error tuple, crc error", context do
+    test "return :error tuple, crc error", %{name: name, device_name: device_name} do
+      unit_id = 1
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+      res = %Modbuzz.PDU.ReadCoils.Res{byte_count: 0, coil_status: []}
+
       Modbuzz.RTU.TransportMock
       |> expect(:write, fn _pid, _binary, _timeout ->
-        send(
-          context.name,
-          {:circuits_uart, context.device_name, <<0x01, 0x01, 0x00, 0x00, 0x00>>}
-        )
-
+        <<binary_wo_crc::binary-size(3), _crc::binary-size(2)>> = to_binary(unit_id, res)
+        crc_error_binary = binary_wo_crc <> <<0x00, 0x00>>
+        send(name, {:circuits_uart, device_name, crc_error_binary})
         :ok
       end)
 
-      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
-
-      unit_id = 1
-      GenServer.cast(context.name, {:cast, unit_id, req, self(), 100})
-
+      GenServer.cast(name, {:cast, unit_id, req, self(), 100})
       assert_receive {:modbuzz, :client, ^unit_id, ^req, {:error, :crc_error}}
     end
 
-    test "return :error tuple, server device busy", context do
-      Modbuzz.RTU.TransportMock
-      |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
-
+    test "return :error tuple, server device busy", %{
+      name: name
+    } do
       unit_id = 1
       req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
+
+      Modbuzz.RTU.TransportMock
+      |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
       me = self()
 
@@ -249,9 +252,9 @@ defmodule Modbuzz.RTU.ClientTest do
         end
 
       # First cast occupies unit_id: 1 with pid1
-      GenServer.cast(context.name, {:cast, unit_id, req, pid1, 100})
+      GenServer.cast(name, {:cast, unit_id, req, pid1, 100})
       # Second cast for the same unit_id should report busy to pid2
-      GenServer.cast(context.name, {:cast, unit_id, req, pid2, 100})
+      GenServer.cast(name, {:cast, unit_id, req, pid2, 100})
 
       # Busy must be reported only to the second requester (pid2), not the first requester (pid1).
       assert_receive {:pid2_res, {:error, :another_request_in_progress}}
@@ -298,10 +301,11 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      GenServer.cast(name, {:cast, _unit_id = 0x02, req, self(), 100})
-      GenServer.cast(name, {:cast, unit_id, req, self(), 100})
+      GenServer.cast(name, {:cast, _unit_id = 0x02, req, self(), 10})
+      GenServer.cast(name, {:cast, unit_id, req, self(), 10})
 
       assert_receive {:modbuzz, :client, ^unit_id, ^req, {:ok, ^res}}
+      assert_receive {:modbuzz, :client, _unit_id = 0x02, ^req, {:error, :timeout}}
     end
 
     test "clears buffer and recovers on binary_is_long binary", %{
@@ -324,10 +328,11 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      GenServer.cast(name, {:cast, _unit_id = 0x02, req, self(), 100})
-      GenServer.cast(name, {:cast, unit_id, req, self(), 100})
+      GenServer.cast(name, {:cast, _unit_id = 0x02, req, self(), 10})
+      GenServer.cast(name, {:cast, unit_id, req, self(), 10})
 
       assert_receive {:modbuzz, :client, ^unit_id, ^req, {:ok, ^res}}
+      assert_receive {:modbuzz, :client, _unit_id = 0x02, ^req, {:error, :timeout}}
     end
   end
 
@@ -352,17 +357,17 @@ defmodule Modbuzz.RTU.ClientTest do
       %{name: name}
     end
 
-    test "pending cast requester gets client_terminated", context do
-      Modbuzz.RTU.TransportMock
-      |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
-
+    test "pending cast requester gets client_terminated", %{
+      name: name
+    } do
       unit_id = 1
       req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 0}
 
-      :ok = GenServer.cast(context.name, {:cast, unit_id, req, self(), 100})
+      Modbuzz.RTU.TransportMock
+      |> expect(:write, fn _pid, _binary, _timeout -> :ok end)
 
-      :ok = GenServer.stop(context.name, :shutdown)
-
+      :ok = GenServer.cast(name, {:cast, unit_id, req, self(), 100})
+      :ok = GenServer.stop(name, :shutdown)
       assert_receive {:modbuzz, :client, ^unit_id, ^req, {:error, :client_terminated}}
     end
   end

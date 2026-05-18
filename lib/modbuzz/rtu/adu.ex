@@ -9,7 +9,7 @@ defmodule Modbuzz.RTU.ADU do
   @crc_defn :cerlc.init(:crc16_modbus)
   @crc_length 2
 
-  @type t :: %__MODULE__{unit_id: 0x00..0xF7, pdu: struct(), crc_valid?: boolean()}
+  @type t :: %__MODULE__{unit_id: 0x00..0xF7, pdu: struct() | nil, crc_valid?: boolean()}
   defstruct unit_id: 0x00, pdu: nil, crc_valid?: true
 
   def new(pdu, unit_id) when is_struct(pdu) do

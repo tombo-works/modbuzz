@@ -38,11 +38,8 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
 
     case transport.recv(socket, _length = 0, timeout) do
       {:ok, binary} ->
-        for adu <- Modbuzz.TCP.ADU.decode(binary, []) do
-          {:ok, request} = Modbuzz.PDU.decode_request(adu.pdu)
-
-          request(data_source, adu.unit_id, request, timeout)
-          |> Modbuzz.PDU.encode()
+        for {:ok, adu} <- Modbuzz.TCP.ADU.decode_request(binary, []) do
+          request(data_source, adu.unit_id, adu.pdu, timeout)
           |> Modbuzz.TCP.ADU.new(adu.transaction_id, adu.unit_id)
           |> Modbuzz.TCP.ADU.encode()
         end

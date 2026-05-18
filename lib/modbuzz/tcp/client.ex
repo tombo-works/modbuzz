@@ -10,7 +10,6 @@ defmodule Modbuzz.TCP.Client do
     defstruct [:unit_id, :request, :from_pid, :sent_time]
   end
 
-  alias Modbuzz.PDU
   alias Modbuzz.TCP.ADU
 
   @doc """
@@ -138,7 +137,7 @@ defmodule Modbuzz.TCP.Client do
     %{transport: transport, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = request |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -146,9 +145,12 @@ defmodule Modbuzz.TCP.Client do
          {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
       [res_tuple] =
-        for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
-          PDU.decode_response(pdu)
-        end
+        Enum.map(
+          ADU.decode_response(binary, []),
+          fn {ok_or_error, %ADU{transaction_id: ^transaction_id, pdu: pdu}} ->
+            {ok_or_error, pdu}
+          end
+        )
 
       GenServer.reply(from, res_tuple)
       {:noreply, %{state | socket: socket}}
@@ -178,7 +180,7 @@ defmodule Modbuzz.TCP.Client do
     } = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = request |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -209,16 +211,19 @@ defmodule Modbuzz.TCP.Client do
     %{transport: transport, socket: socket, transaction_id: transaction_id} = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = request |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
     with {:send, :ok} <- {:send, transport.send(socket, adu)},
          {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
       [res_tuple] =
-        for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
-          PDU.decode_response(pdu)
-        end
+        Enum.map(
+          ADU.decode_response(binary, []),
+          fn {ok_or_error, %ADU{transaction_id: ^transaction_id, pdu: pdu}} ->
+            {ok_or_error, pdu}
+          end
+        )
 
       {:reply, res_tuple, state}
     else
@@ -252,7 +257,7 @@ defmodule Modbuzz.TCP.Client do
     } = state
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    adu = request |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
     state = %{state | transaction_id: transaction_id}
 
@@ -286,23 +291,26 @@ defmodule Modbuzz.TCP.Client do
     %{transactions: transactions} = state
 
     transactions =
-      ADU.decode(binary, [])
-      |> Enum.reduce(transactions, fn %ADU{transaction_id: transaction_id, pdu: pdu}, acc ->
-        {transaction, acc} = Map.pop(acc, transaction_id)
-        res_tuple = PDU.decode_response(pdu)
+      ADU.decode_response(binary, [])
+      |> Enum.reduce(
+        transactions,
+        fn {ok_or_error, %ADU{transaction_id: transaction_id, pdu: pdu}}, acc ->
+          {transaction, acc} = Map.pop(acc, transaction_id)
+          res_tuple = {ok_or_error, pdu}
 
-        send(
-          transaction.from_pid,
-          {
-            :modbuzz,
-            transaction.unit_id,
-            transaction.request,
-            res_tuple
-          }
-        )
+          send(
+            transaction.from_pid,
+            {
+              :modbuzz,
+              transaction.unit_id,
+              transaction.request,
+              res_tuple
+            }
+          )
 
-        acc
-      end)
+          acc
+        end
+      )
 
     {:noreply, %{state | transactions: transactions}}
   end

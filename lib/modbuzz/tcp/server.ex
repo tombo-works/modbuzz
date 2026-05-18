@@ -80,6 +80,7 @@ defmodule Modbuzz.TCP.Server do
       packet: :raw,
       active: active,
       backlog: 1024,
+      keepalive: true,
       nodelay: true,
       send_timeout: 30_000,
       send_timeout_close: true,

@@ -343,7 +343,14 @@ defmodule Modbuzz.TCP.Client do
     transport.connect(
       address,
       port,
-      [mode: :binary, packet: :raw, active: active],
+      [
+        mode: :binary,
+        packet: :raw,
+        active: active,
+        keepalive: true,
+        nodelay: true,
+        reuseaddr: true
+      ],
       _timeout = 3000
     )
   end

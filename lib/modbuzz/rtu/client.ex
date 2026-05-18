@@ -51,33 +51,15 @@ defmodule Modbuzz.RTU.Client do
 
   def handle_call({:call, unit_id, request, timeout}, from, state)
       when is_valid_unit_id(unit_id) do
-    %{
-      transport: transport,
-      transport_pid: transport_pid,
-      reqs: reqs
-    } = state
-
-    req = Map.get(reqs, unit_id)
-    adu = ADU.new(request, unit_id)
-    new_req = {:call, unit_id, request, from, make_ref()}
-
-    with true <- is_nil(req) || {:error, :another_request_in_progress},
-         binary <- ADU.encode(adu),
-         :ok <- transport.write(transport_pid, binary, timeout) do
-      Process.send_after(self(), {:timeout?, new_req}, timeout)
-      {:noreply, %{state | reqs: Map.put(reqs, adu.unit_id, new_req)}}
-    else
-      {:error, :another_request_in_progress} = res_tuple ->
-        {:reply, res_tuple, state}
-
-      {:error, reason} = res_tuple ->
-        Log.error("#{inspect(transport)} write error, #{inspect(reason)}.", nil, state)
-        {:reply, res_tuple, state}
-    end
+    handle_req({:call, unit_id, request, from, timeout}, state)
   end
 
   def handle_cast({:cast, unit_id, request, pid, timeout}, state)
       when is_valid_unit_id(unit_id) and is_pid(pid) do
+    handle_req({:cast, unit_id, request, pid, timeout}, state)
+  end
+
+  defp handle_req({call_or_cast, unit_id, request, from_or_pid, timeout}, state) do
     %{
       client_name: client_name,
       transport: transport,
@@ -87,20 +69,23 @@ defmodule Modbuzz.RTU.Client do
 
     req = Map.get(reqs, unit_id)
     adu = ADU.new(request, unit_id)
-    new_req = {:cast, unit_id, request, pid, make_ref()}
+    new_req = {call_or_cast, unit_id, request, from_or_pid, make_ref()}
+
+    timer = Process.send_after(self(), {:timeout?, new_req}, timeout)
 
     with true <- is_nil(req) || {:error, :another_request_in_progress},
          binary <- ADU.encode(adu),
          :ok <- transport.write(transport_pid, binary, timeout) do
-      Process.send_after(self(), {:timeout?, new_req}, timeout)
       {:noreply, %{state | reqs: Map.put(reqs, adu.unit_id, new_req)}}
     else
       {:error, :another_request_in_progress} = res_tuple ->
+        Process.cancel_timer(timer)
         maybe_report_response(new_req, client_name, res_tuple)
         {:noreply, state}
 
       {:error, reason} = res_tuple ->
         Log.error("#{inspect(transport)} write error, #{inspect(reason)}.", nil, state)
+        Process.cancel_timer(timer)
         maybe_report_response(new_req, client_name, res_tuple)
         {:noreply, state}
     end

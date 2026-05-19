@@ -9,7 +9,6 @@ defmodule Modbuzz.TCP.Server do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(args) when is_list(args) do
     name = Keyword.fetch!(args, :name)
-
     GenServer.start_link(__MODULE__, args, name: name)
   end
 
@@ -27,7 +26,6 @@ defmodule Modbuzz.TCP.Server do
        name: name,
        address: address,
        port: port,
-       active: false,
        listen_socket: nil,
        data_source: data_source
      }, {:continue, :listen}}
@@ -35,7 +33,7 @@ defmodule Modbuzz.TCP.Server do
 
   @doc false
   def handle_continue(:listen, state) do
-    case gen_tcp_listen(state) do
+    case listen(state) do
       {:ok, socket} ->
         {:noreply, %{state | listen_socket: socket}, {:continue, :accept}}
 
@@ -71,14 +69,14 @@ defmodule Modbuzz.TCP.Server do
     {:noreply, state, {:continue, :accept}}
   end
 
-  defp gen_tcp_listen(state) do
-    %{transport: transport, address: address, port: port, active: active} = state
+  defp listen(state) do
+    %{transport: transport, address: address, port: port} = state
 
     transport.listen(port,
       ip: address,
       mode: :binary,
       packet: :raw,
-      active: active,
+      active: false,
       backlog: 1024,
       keepalive: true,
       nodelay: true,

@@ -81,7 +81,7 @@ defmodule Modbuzz.TCP.Client do
   Its response is sent as a meessage, looks like
 
   ```
-  {:modbuzz, unit_id, request, response}
+  {:modbuzz, client_name, unit_id, request, response_tuple}
   ```
 
   The response type is `{:ok, %Res{}}` or `{:error, %Err{} | reason :: term()}`.
@@ -213,7 +213,7 @@ defmodule Modbuzz.TCP.Client do
 
         maybe_report_response(transaction, client_name, res_tuple)
 
-        {:noreply, %{state | transactions: Map.put(transactions, transaction_id, nil)}}
+        {:noreply, %{state | transactions: Map.delete(transactions, transaction_id)}}
 
       # the current request is different, do not report timeout error
       # this means the request that triggered this timeout message has already been responded to

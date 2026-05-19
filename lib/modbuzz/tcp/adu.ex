@@ -13,6 +13,10 @@ defmodule Modbuzz.TCP.ADU do
         }
   defstruct transaction_id: 0x0000, protocol_id: 0x0000, length: 0x0000, unit_id: 0x00, pdu: nil
 
+  def increment_transaction_id(transaction_id) do
+    if transaction_id >= 0xFFFF, do: 0, else: transaction_id + 1
+  end
+
   def new(pdu, transaction_id, unit_id) when is_struct(pdu) do
     %__MODULE__{
       transaction_id: transaction_id,
@@ -73,9 +77,5 @@ defmodule Modbuzz.TCP.ADU do
     acc = [adu_tuple | acc]
 
     if rest == <<>>, do: Enum.reverse(acc), else: decode_response(rest, acc)
-  end
-
-  def increment_transaction_id(transaction_id) do
-    if transaction_id == 0xFFFF, do: 0, else: transaction_id + 1
   end
 end

@@ -57,10 +57,30 @@ defmodule Modbuzz.TCP.ADU do
   end
 
   def decode_response(
-        <<transaction_id::16, protocol_id::16, length::16, unit_id,
-          pdu_binary::binary-size(length - 1), rest::binary>>,
+        <<_transaction_id::16, _protocol_id::16, length::16, _rest::binary>> = binary,
         acc
       ) do
+    adu_frame_size = 2 + 2 + 2 + length
+
+    if byte_size(binary) >= adu_frame_size do
+      <<adu_binary::binary-size(adu_frame_size), rest::binary>> = binary
+
+      adu = decode_response(adu_binary)
+
+      decode_response(rest, [adu | acc])
+    else
+      {Enum.reverse(acc), binary}
+    end
+  end
+
+  def decode_response(binary, acc) do
+    {Enum.reverse(acc), binary}
+  end
+
+  defp decode_response(
+         <<transaction_id::16, protocol_id::16, length::16, unit_id,
+           pdu_binary::binary-size(length - 1)>>
+       ) do
     adu = %__MODULE__{
       transaction_id: transaction_id,
       protocol_id: protocol_id,
@@ -68,14 +88,9 @@ defmodule Modbuzz.TCP.ADU do
       unit_id: unit_id
     }
 
-    adu_tuple =
-      case PDU.decode_response(pdu_binary) do
-        {:ok, pdu} -> {:ok, %{adu | pdu: pdu}}
-        {:error, pdu} -> {:error, %{adu | pdu: pdu}}
-      end
-
-    acc = [adu_tuple | acc]
-
-    if rest == <<>>, do: Enum.reverse(acc), else: decode_response(rest, acc)
+    case PDU.decode_response(pdu_binary) do
+      {:ok, pdu} -> {:ok, %{adu | pdu: pdu}}
+      {:error, pdu} -> {:error, %{adu | pdu: pdu}}
+    end
   end
 end

@@ -15,6 +15,10 @@ defmodule Modbuzz.TCP.ADU do
 
   defguardp is_valid_length(length) when 1 <= length and length <= 0x00FE
 
+  @mbap_length 7
+
+  def max_frame_length, do: @mbap_length + PDU.max_frame_length()
+
   def increment_transaction_id(transaction_id) do
     if transaction_id >= 0xFFFF, do: 0, else: transaction_id + 1
   end

@@ -1,6 +1,10 @@
 defmodule Modbuzz.PDU do
   @moduledoc false
 
+  @max_frame_length 253
+
+  def max_frame_length, do: @max_frame_length
+
   defdelegate encode(struct), to: Modbuzz.PDU.Protocol, as: :encode
 
   for {modbus_function_code, modbus_function} <- Modbuzz.MixProject.pdu_seed() do

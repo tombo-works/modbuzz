@@ -3,6 +3,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
 
   use GenServer, restart: :temporary
 
+  alias Modbuzz.TCP.ADU
   alias Modbuzz.TCP.Log
 
   def start_link(args) do
@@ -24,7 +25,8 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
        port: port,
        socket: socket,
        data_source: data_source,
-       timeout: timeout
+       timeout: timeout,
+       binary: <<>>
      }, {:continue, :recv}}
   end
 
@@ -38,15 +40,18 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
 
     case transport.recv(socket, _length = 0, timeout) do
       {:ok, binary} ->
-        for {:ok, adu} <- Modbuzz.TCP.ADU.decode_request(binary, []) do
+        binary = state.binary <> binary
+        {adu_tuples, binary} = ADU.decode_request(binary, [])
+
+        for {:ok, adu} <- adu_tuples do
           request(data_source, adu.unit_id, adu.pdu, timeout)
-          |> Modbuzz.TCP.ADU.new(adu.transaction_id, adu.unit_id)
-          |> Modbuzz.TCP.ADU.encode()
+          |> ADU.new(adu.transaction_id, adu.unit_id)
+          |> ADU.encode()
         end
         |> Enum.reduce(<<>>, &(&2 <> &1))
         |> then(&transport.send(socket, &1))
 
-        {:noreply, state, {:continue, :recv}}
+        {:noreply, %{state | binary: binary}, {:continue, :recv}}
 
       {:error, :closed = reason} ->
         :ok = transport.close(socket)

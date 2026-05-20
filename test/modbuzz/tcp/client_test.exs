@@ -67,6 +67,21 @@ defmodule Modbuzz.TCP.ClientTest do
       assert Modbuzz.TCP.Client.call(req) == {:error, :tcp_send_error}
     end
 
+    test "return :error tuple by timeout", %{req: req} do
+      dummy_socket = make_ref()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
+        restart: :temporary
+      )
+
+      assert Modbuzz.TCP.Client.call(Modbuzz.TCP.Client, 0, req, 10) == {:error, :timeout}
+    end
+
     test "return :error tuple, modbus error", %{req: req, res_err: res_err} do
       dummy_socket = make_ref()
 
@@ -145,6 +160,24 @@ defmodule Modbuzz.TCP.ClientTest do
       assert_receive(
         {:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_send_error}}
       )
+    end
+
+    test "return :ok, receive {:error, :timeout}", %{
+      req: req
+    } do
+      dummy_socket = make_ref()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
+        restart: :temporary
+      )
+
+      assert Modbuzz.TCP.Client.cast(Modbuzz.TCP.Client, 0, req, self(), 10) == :ok
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :timeout}})
     end
   end
 

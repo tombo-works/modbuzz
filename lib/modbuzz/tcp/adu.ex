@@ -13,6 +13,8 @@ defmodule Modbuzz.TCP.ADU do
         }
   defstruct transaction_id: 0x0000, protocol_id: 0x0000, length: 0x0000, unit_id: 0x00, pdu: nil
 
+  defguardp is_valid_length(length) when 1 <= length and length <= 0x00FE
+
   def increment_transaction_id(transaction_id) do
     if transaction_id >= 0xFFFF, do: 0, else: transaction_id + 1
   end
@@ -37,7 +39,8 @@ defmodule Modbuzz.TCP.ADU do
   def decode_request(
         <<_transaction_id::16, _protocol_id::16, length::16, _rest::binary>> = binary,
         acc
-      ) do
+      )
+      when is_valid_length(length) do
     adu_frame_size = 2 + 2 + 2 + length
 
     if byte_size(binary) >= adu_frame_size do
@@ -58,7 +61,8 @@ defmodule Modbuzz.TCP.ADU do
   def decode_response(
         <<_transaction_id::16, _protocol_id::16, length::16, _rest::binary>> = binary,
         acc
-      ) do
+      )
+      when is_valid_length(length) do
     adu_frame_size = 2 + 2 + 2 + length
 
     if byte_size(binary) >= adu_frame_size do
@@ -79,7 +83,8 @@ defmodule Modbuzz.TCP.ADU do
   defp decode_request(
          <<transaction_id::16, protocol_id::16, length::16, unit_id,
            pdu_binary::binary-size(length - 1)>>
-       ) do
+       )
+       when is_valid_length(length) do
     adu = %__MODULE__{
       transaction_id: transaction_id,
       protocol_id: protocol_id,
@@ -95,7 +100,8 @@ defmodule Modbuzz.TCP.ADU do
   defp decode_response(
          <<transaction_id::16, protocol_id::16, length::16, unit_id,
            pdu_binary::binary-size(length - 1)>>
-       ) do
+       )
+       when is_valid_length(length) do
     adu = %__MODULE__{
       transaction_id: transaction_id,
       protocol_id: protocol_id,

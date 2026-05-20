@@ -122,7 +122,8 @@ defmodule Modbuzz.TCP.Client do
       port: port,
       socket: nil,
       transaction_id: 0,
-      transactions: %{}
+      transactions: %{},
+      binary: <<>>
     }
 
     {:ok, state}
@@ -182,7 +183,7 @@ defmodule Modbuzz.TCP.Client do
             :ok = transport.close(socket)
             res_tuple = {:error, :tcp_send_error}
             maybe_report_response(transaction, client_name, res_tuple)
-            {:noreply, %{state | socket: nil}}
+            {:noreply, %{state | socket: nil, binary: <<>>}}
         end
 
       {:error, reason} ->
@@ -190,7 +191,7 @@ defmodule Modbuzz.TCP.Client do
         Process.cancel_timer(timer)
         res_tuple = {:error, :tcp_connect_error}
         maybe_report_response(transaction, client_name, res_tuple)
-        {:noreply, %{state | socket: nil}}
+        {:noreply, %{state | socket: nil, binary: <<>>}}
     end
   end
 
@@ -229,9 +230,13 @@ defmodule Modbuzz.TCP.Client do
       transactions: transactions
     } = state
 
+    new_binary = state.binary <> binary
+
+    {adu_tuples, binary} = ADU.decode_response(new_binary, [])
+
     transactions =
-      ADU.decode_response(binary, [])
-      |> Enum.reduce(
+      Enum.reduce(
+        adu_tuples,
         transactions,
         fn {ok_or_error, %ADU{transaction_id: transaction_id, pdu: pdu}}, acc ->
           {transaction, acc} = Map.pop(acc, transaction_id)
@@ -241,21 +246,21 @@ defmodule Modbuzz.TCP.Client do
         end
       )
 
-    {:noreply, %{state | transactions: transactions}}
+    {:noreply, %{state | transactions: transactions, binary: binary}}
   end
 
   def handle_info({:tcp_closed, socket}, %{socket: socket} = state) do
     %{transport: transport} = state
     Log.warning("#{inspect(transport)} closed", nil, state)
     :ok = transport.close(socket)
-    {:noreply, %{state | socket: nil}}
+    {:noreply, %{state | socket: nil, binary: <<>>}}
   end
 
   def handle_info({:tcp_error, socket, reason}, %{socket: socket} = state) do
     %{transport: transport} = state
     Log.error("transport error", reason, state)
     :ok = transport.close(socket)
-    {:noreply, %{state | socket: nil}}
+    {:noreply, %{state | socket: nil, binary: <<>>}}
   end
 
   defp connect(state, timeout) do

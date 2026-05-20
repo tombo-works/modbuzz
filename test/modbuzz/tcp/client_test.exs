@@ -82,7 +82,7 @@ defmodule Modbuzz.TCP.ClientTest do
       assert Modbuzz.TCP.Client.call(Modbuzz.TCP.Client, 0, req, 10) == {:error, :timeout}
     end
 
-    test "return :error tuple, modbus error", %{req: req, res_err: res_err} do
+    test "return :error tuple by modbus error", %{req: req, res_err: res_err} do
       dummy_socket = make_ref()
 
       Modbuzz.TCP.TransportMock
@@ -128,7 +128,7 @@ defmodule Modbuzz.TCP.ClientTest do
       assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
     end
 
-    test "return :ok, connect error", %{req: req} do
+    test "return :ok, receive {:error, :tcp_connect_error}", %{req: req} do
       Modbuzz.TCP.TransportMock
       |> expect(:connect, fn _, _, _, _ -> {:error, :timeout} end)
 
@@ -144,7 +144,7 @@ defmodule Modbuzz.TCP.ClientTest do
       )
     end
 
-    test "return :ok, send error", %{req: req} do
+    test "return :ok, receive {:error, :tcp_send_error}", %{req: req} do
       Modbuzz.TCP.TransportMock
       |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
       |> expect(:send, fn _, _ -> {:error, :closed} end)

@@ -38,6 +38,14 @@ defmodule Modbuzz.PDU do
     end
   end
 
+  def decode_request(<<modbus_function_code, _rest::binary>>) do
+    {:error, {:unknown_function_code, modbus_function_code}}
+  end
+
+  def decode_response(<<modbus_function_code, _rest::binary>>) do
+    {:error, {:unknown_function_code, modbus_function_code}}
+  end
+
   # NOTE: We need this fallback, because the binary is not always guaranteed to be correct.
   def request_length(<<_, _rest::binary>>), do: {:error, :unknown}
   def response_length(<<_, _rest::binary>>), do: {:error, :unknown}

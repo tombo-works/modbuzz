@@ -298,6 +298,27 @@ defmodule Modbuzz.TCP.ClientTest do
       send(pid, {:tcp_error, dummy_socket, :reason})
       assert_receive(:closed)
     end
+
+    test "message {:tcp, socket, binary}, invalid length closes socket", %{
+      pid: pid,
+      req: req
+    } do
+      dummy_socket = make_ref()
+      me = self()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+      |> expect(:close, fn _ ->
+        send(me, :closed)
+        :ok
+      end)
+
+      :ok = Modbuzz.TCP.Client.cast(req)
+
+      send(pid, {:tcp, dummy_socket, <<0::16, 0::16, 0::16>>})
+      assert_receive(:closed)
+    end
   end
 
   defp to_binary(pdu, transaction_id \\ 0x0001) do

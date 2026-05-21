@@ -41,17 +41,24 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
     case transport.recv(socket, _length = 0, timeout) do
       {:ok, binary} ->
         binary = state.binary <> binary
-        {adu_tuples, binary} = ADU.decode_request(binary, [])
 
-        for {:ok, adu} <- adu_tuples do
-          request(data_source, adu.unit_id, adu.pdu, timeout)
-          |> ADU.new(adu.transaction_id, adu.unit_id)
-          |> ADU.encode()
+        case ADU.decode_request(binary, []) do
+          {:ok, {adu_tuples, binary}} ->
+            for {:ok, adu} <- adu_tuples do
+              request(data_source, adu.unit_id, adu.pdu, timeout)
+              |> ADU.new(adu.transaction_id, adu.unit_id)
+              |> ADU.encode()
+            end
+            |> Enum.reduce(<<>>, &(&2 <> &1))
+            |> then(&transport.send(socket, &1))
+
+            {:noreply, %{state | binary: binary}, {:continue, :recv}}
+
+          {:error, reason} ->
+            Log.error("invalid request", reason, state)
+            :ok = transport.close(socket)
+            {:stop, :invalid_length, %{state | binary: <<>>}}
         end
-        |> Enum.reduce(<<>>, &(&2 <> &1))
-        |> then(&transport.send(socket, &1))
-
-        {:noreply, %{state | binary: binary}, {:continue, :recv}}
 
       {:error, :closed = reason} ->
         :ok = transport.close(socket)

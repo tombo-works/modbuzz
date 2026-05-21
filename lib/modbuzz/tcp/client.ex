@@ -222,29 +222,36 @@ defmodule Modbuzz.TCP.Client do
     end
   end
 
-  def handle_info({:tcp, _socket, binary}, state) do
+  def handle_info({:tcp, socket, binary}, state) do
     %{
       client_name: client_name,
+      transport: transport,
       transactions: transactions
     } = state
 
     new_binary = state.binary <> binary
 
-    {adu_tuples, binary} = ADU.decode_response(new_binary, [])
+    case ADU.decode_response(new_binary, []) do
+      {:ok, {adu_tuples, binary}} ->
+        transactions =
+          Enum.reduce(
+            adu_tuples,
+            transactions,
+            fn {ok_or_error, %ADU{transaction_id: transaction_id, pdu: pdu}}, acc ->
+              {transaction, acc} = Map.pop(acc, transaction_id)
+              res_tuple = {ok_or_error, pdu}
+              maybe_report_response(transaction, client_name, res_tuple)
+              acc
+            end
+          )
 
-    transactions =
-      Enum.reduce(
-        adu_tuples,
-        transactions,
-        fn {ok_or_error, %ADU{transaction_id: transaction_id, pdu: pdu}}, acc ->
-          {transaction, acc} = Map.pop(acc, transaction_id)
-          res_tuple = {ok_or_error, pdu}
-          maybe_report_response(transaction, client_name, res_tuple)
-          acc
-        end
-      )
+        {:noreply, %{state | transactions: transactions, binary: binary}}
 
-    {:noreply, %{state | transactions: transactions, binary: binary}}
+      {:error, reason} ->
+        Log.error("invalid response", reason, state)
+        transport.close(socket)
+        {:noreply, %{state | socket: nil, binary: <<>>}}
+    end
   end
 
   def handle_info({:tcp_closed, socket}, state) do

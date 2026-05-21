@@ -248,10 +248,20 @@ defmodule Modbuzz.TCP.Client do
   end
 
   def handle_info({:tcp_closed, socket}, state) do
-    %{transport: transport} = state
-    Log.warning("#{inspect(transport)} closed", nil, state)
+    %{
+      client_name: client_name,
+      transport: transport,
+      transaction_id: transaction_id,
+      transactions: transactions
+    } = state
+
+    Log.error("#{inspect(transport)} closed", nil, state)
     if not is_nil(socket), do: :ok = transport.close(socket)
-    {:noreply, %{state | socket: nil, binary: <<>>}}
+
+    {transaction, transactions} = Map.pop(transactions, transaction_id)
+    res_tuple = {:error, :tcp_closed}
+    maybe_report_response(transaction, client_name, res_tuple)
+    {:noreply, %{state | socket: nil, binary: <<>>, transactions: transactions}}
   end
 
   def handle_info({:tcp_error, socket, reason}, state) do

@@ -9,522 +9,320 @@ defmodule Modbuzz.TCP.ClientTest do
   setup :set_mox_global
 
   describe "start_link/1" do
-    setup do
-      %{parent: self(), ref: make_ref()}
-    end
-
-    test "connect/4 succeeded", %{parent: parent, ref: ref} do
-      Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :connect})
-        {:ok, _dummy_port = make_ref()}
-      end)
-
-      assert {:ok, pid} = Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock)
-      assert_receive({^ref, :connect})
-      GenServer.stop(pid)
-    end
-
-    test "connect/4 succeeded after failed", %{parent: parent, ref: ref} do
-      Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:error, :timeout} end)
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :connect})
-        {:ok, _dummy_port = make_ref()}
-      end)
-
-      assert {:ok, pid} = Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock)
-      assert_receive({^ref, :connect})
-      GenServer.stop(pid)
+    test "return :ok tuple" do
+      assert {:ok, _pid} = Modbuzz.TCP.Client.start_link(transport: Modbuzz.TCP.TransportMock)
     end
   end
 
   describe "call" do
     setup do
-      %{parent: self(), ref: make_ref()}
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
+      res = %Modbuzz.PDU.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
+      res_err = %Modbuzz.PDU.ReadCoils.Err{exception_code: 0x01}
+
+      %{req: req, res: res, res_err: res_err}
     end
 
-    test "raise when active: true" do
-      Process.flag(:trap_exit, true)
+    test "return :ok tuple", %{req: req, res: res} do
+      dummy_socket = make_ref()
 
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-
-      pid =
-        start_link_supervised!(
-          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
-          restart: :temporary
-        )
-
-      catch_exit(
-        Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
-          starting_address: 0,
-          quantity_of_coils: 16
-        })
-      )
-
-      assert_receive({:EXIT, ^pid, {%RuntimeError{message: _message}, _}})
-    end
-
-    test "return :ok tuple", %{parent: parent, ref: ref} do
-      Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ ->
-        send(parent, {ref, :recv})
-        {:ok, read_coils_recv_adu(1)}
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ ->
+        send(Modbuzz.TCP.Client, {:tcp, dummy_socket, to_binary(res)})
+        :ok
       end)
 
       start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) ==
-               {:ok,
-                %Modbuzz.PDU.ReadCoils.Res{
-                  byte_count: 0x02,
-                  coil_status: List.duplicate(false, 16)
-                }}
-
-      assert_receive({^ref, :recv})
+      assert Modbuzz.TCP.Client.call(req) == {:ok, res}
     end
 
-    test "return :ok tuple, 1st send failed", %{parent: parent, ref: ref} do
+    test "return :error tuple by connect error", %{req: req} do
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> {:error, :closed} end)
-      |> expect(:close, fn _ -> :ok end)
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ ->
-        send(parent, {ref, :recv})
-        {:ok, read_coils_recv_adu(2)}
-      end)
-
-      start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
-        restart: :temporary
-      )
-
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) ==
-               {:ok,
-                %Modbuzz.PDU.ReadCoils.Res{
-                  byte_count: 0x02,
-                  coil_status: List.duplicate(false, 16)
-                }}
-
-      assert_receive({^ref, :recv})
-    end
-
-    test "return :ok tuple, 1st recv failed", %{parent: parent, ref: ref} do
-      Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ -> {:error, :closed} end)
-      |> expect(:close, fn _ -> :ok end)
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ ->
-        send(parent, {ref, :recv})
-        {:ok, read_coils_recv_adu(2)}
-      end)
-
-      start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
-        restart: :temporary
-      )
-
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) ==
-               {:ok,
-                %Modbuzz.PDU.ReadCoils.Res{
-                  byte_count: 0x02,
-                  coil_status: List.duplicate(false, 16)
-                }}
-
-      assert_receive({^ref, :recv})
-    end
-
-    test "return :error tuple, modbus error", %{parent: parent, ref: ref} do
-      Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ ->
-        send(parent, {ref, :recv})
-        {:ok, read_coils_recv_adu(1, _error = true)}
-      end)
-
-      start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
-        restart: :temporary
-      )
-
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) == {:error, %Modbuzz.PDU.ReadCoils.Err{exception_code: 0x01}}
-
-      assert_receive({^ref, :recv})
-    end
-
-    test "return :error tuple, 2nd connnect failed", %{parent: parent, ref: ref} do
-      Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ -> {:error, :closed} end)
-      |> expect(:close, fn _ -> :ok end)
       |> expect(:connect, fn _, _, _, _ -> {:error, :timeout} end)
-      # confirm {:continue, :connect}
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :connect})
-        {:ok, _dummy_port = make_ref()}
-      end)
 
       start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) == {:error, :timeout}
-
-      assert_receive({^ref, :connect})
+      assert Modbuzz.TCP.Client.call(req) == {:error, :tcp_connect_error}
     end
 
-    test "return :error tuple, 2nd send failed", %{parent: parent, ref: ref} do
+    test "return :error tuple by send error", %{req: req} do
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ -> {:error, :closed} end)
-      |> expect(:close, fn _ -> :ok end)
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_socket = make_ref()} end)
       |> expect(:send, fn _, _ -> {:error, :closed} end)
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :send})
-        {:ok, _dummy_port = make_ref()}
-      end)
+      |> expect(:close, fn _ -> :ok end)
 
       start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) == {:error, :closed}
-
-      assert_receive({^ref, :send})
+      assert Modbuzz.TCP.Client.call(req) == {:error, :tcp_send_error}
     end
 
-    test "return :error tuple, 2nd recv failed", %{parent: parent, ref: ref} do
+    test "return :error tuple by timeout", %{req: req} do
+      dummy_socket = make_ref()
+
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
       |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ -> {:error, :closed} end)
-      |> expect(:close, fn _ -> :ok end)
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:recv, fn _, _, _ -> {:error, :closed} end)
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :recv})
-        {:ok, _dummy_port = make_ref()}
-      end)
 
       start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.call(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) == {:error, :closed}
+      assert Modbuzz.TCP.Client.call(Modbuzz.TCP.Client, 0, req, 10) == {:error, :timeout}
+    end
 
-      assert_receive({^ref, :recv})
+    test "return :error tuple by modbus error", %{req: req, res_err: res_err} do
+      dummy_socket = make_ref()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ ->
+        send(Modbuzz.TCP.Client, {:tcp, dummy_socket, to_binary(res_err)})
+        :ok
+      end)
+
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
+        restart: :temporary
+      )
+
+      assert Modbuzz.TCP.Client.call(req) == {:error, res_err}
     end
   end
 
   describe "cast" do
     setup do
-      %{parent: self(), ref: make_ref()}
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
+      res = %Modbuzz.PDU.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
+
+      %{parent: self(), ref: make_ref(), req: req, res: res}
     end
 
-    test "raise when active: false" do
-      Process.flag(:trap_exit, true)
+    test "return :ok", %{req: req, res: res} do
+      dummy_socket = make_ref()
 
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-
-      pid =
-        start_link_supervised!(
-          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: false},
-          restart: :temporary
-        )
-
-      Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
-        starting_address: 0,
-        quantity_of_coils: 16
-      })
-
-      assert_receive({:EXIT, ^pid, {%RuntimeError{message: _message}, _}})
-    end
-
-    test "return :ok", %{parent: parent, ref: ref} do
-      Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
       |> expect(:send, fn _, _ ->
-        send(parent, {ref, :send})
+        send(Modbuzz.TCP.Client, {:tcp, dummy_socket, to_binary(res)})
         :ok
       end)
 
       start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) == :ok
-
-      assert_receive({^ref, :send})
+      assert Modbuzz.TCP.Client.cast(req) == :ok
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
     end
 
-    test "return :ok, 1st send failed", %{parent: parent, ref: ref} do
+    test "return :ok, receive {:error, :tcp_connect_error}", %{req: req} do
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> {:error, :closed} end)
-      |> expect(:close, fn _ -> :ok end)
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ ->
-        send(parent, {ref, :send})
-        :ok
-      end)
-
-      start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
-        restart: :temporary
-      )
-
-      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) == :ok
-
-      assert_receive({^ref, :send})
-    end
-
-    test "return :error tuple, 2nd connect failed", %{parent: parent, ref: ref} do
-      Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> {:error, :closed} end)
-      |> expect(:close, fn _ -> :ok end)
       |> expect(:connect, fn _, _, _, _ -> {:error, :timeout} end)
-      # confirm {:continue, :connect}
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :connect})
-        {:ok, _dummy_port = make_ref()}
-      end)
 
       start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) == :ok
+      assert Modbuzz.TCP.Client.cast(req) == :ok
 
-      assert_receive({^ref, :connect})
+      assert_receive(
+        {:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_connect_error}}
+      )
     end
 
-    test "return :error tuple, 2nd send failed", %{parent: parent, ref: ref} do
+    test "return :ok, receive {:error, :tcp_send_error}", %{req: req} do
       Modbuzz.TCP.TransportMock
       |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
       |> expect(:send, fn _, _ -> {:error, :closed} end)
       |> expect(:close, fn _ -> :ok end)
-      |> expect(:connect, fn _, _, _, _ -> {:ok, _dummy_port = make_ref()} end)
-      |> expect(:send, fn _, _ -> {:error, :closed} end)
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :send})
-        {:ok, _dummy_port = make_ref()}
-      end)
 
       start_link_supervised!(
-        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
         restart: :temporary
       )
 
-      assert Modbuzz.TCP.Client.cast(%Modbuzz.PDU.ReadCoils.Req{
-               starting_address: 0,
-               quantity_of_coils: 16
-             }) == :ok
+      assert Modbuzz.TCP.Client.cast(req) == :ok
 
-      assert_receive({^ref, :send})
+      assert_receive(
+        {:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_send_error}}
+      )
     end
 
-    test "message {:tcp, socket, binary}" do
-      dummy_port = make_ref()
+    test "return :ok, receive {:error, :timeout}", %{
+      req: req
+    } do
+      dummy_socket = make_ref()
 
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_port} end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
       |> expect(:send, fn _, _ -> :ok end)
 
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
+        restart: :temporary
+      )
+
+      assert Modbuzz.TCP.Client.cast(Modbuzz.TCP.Client, 0, req, self(), 10) == :ok
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :timeout}})
+    end
+  end
+
+  describe "tcp messages" do
+    setup do
       pid =
         start_link_supervised!(
-          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
+          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
           restart: :temporary
         )
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
-      assert Modbuzz.TCP.Client.cast(request) == :ok
+      req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
+      res = %Modbuzz.PDU.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
 
-      send(pid, {:tcp, dummy_port, read_coils_recv_adu(1)})
-
-      assert_receive({:modbuzz, 0, ^request, {:ok, _}})
+      %{pid: pid, req: req, res: res}
     end
 
-    test "message {:tcp, socket, binary}, recv two messages at once" do
-      dummy_port = make_ref()
+    test "message {:tcp, socket, binary}", %{
+      pid: pid,
+      req: req,
+      res: res
+    } do
+      dummy_socket = make_ref()
 
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_port} end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
       |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:send, fn _, _ -> :ok end)
 
-      pid =
-        start_link_supervised!(
-          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
-          restart: :temporary
-        )
+      :ok = Modbuzz.TCP.Client.cast(req)
 
-      request_1 = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
-      assert Modbuzz.TCP.Client.cast(request_1) == :ok
-      request_2 = %Modbuzz.PDU.WriteSingleCoil.Req{output_address: 16, output_value: true}
-      assert Modbuzz.TCP.Client.cast(request_2) == :ok
-
-      send(pid, {:tcp, dummy_port, read_coils_recv_adu(1) <> write_single_coil_recv_adu(2)})
-
-      assert_receive({:modbuzz, 0, ^request_1, {:ok, _}})
-      assert_receive({:modbuzz, 0, ^request_2, {:ok, _}})
+      send(pid, {:tcp, dummy_socket, to_binary(res)})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
     end
 
-    test "message {:tcp, socket, binary}, {:tcp_closed, socket}", %{parent: parent, ref: ref} do
-      dummy_port = make_ref()
+    test "message {:tcp, socket, binary}, recv two messages at once", %{
+      pid: pid,
+      req: req,
+      res: res
+    } do
+      dummy_socket = make_ref()
 
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_port} end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
       |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:close, fn _ -> :ok end)
-      # confirm {:continue, :connect}
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :connect})
-        {:ok, dummy_port}
-      end)
+      |> expect(:send, fn _, _ -> :ok end)
 
-      pid =
-        start_link_supervised!(
-          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
-          restart: :temporary
-        )
+      :ok = Modbuzz.TCP.Client.cast(req)
+      :ok = Modbuzz.TCP.Client.cast(req)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
-      assert Modbuzz.TCP.Client.cast(request) == :ok
-
-      send(pid, {:tcp, dummy_port, read_coils_recv_adu(1)})
-
-      assert_receive({:modbuzz, 0, ^request, {:ok, _}})
-
-      send(pid, {:tcp_closed, dummy_port})
-      assert_receive({^ref, :connect})
+      send(pid, {:tcp, dummy_socket, to_binary(res, 1) <> to_binary(res, 2)})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
     end
 
-    test "message {:tcp_closed, socket}", %{parent: parent, ref: ref} do
-      dummy_port = make_ref()
+    test "message {:tcp, socket, binary}, {:tcp_closed, socket}", %{
+      pid: pid,
+      req: req,
+      res: res
+    } do
+      dummy_socket = make_ref()
+      me = self()
 
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_port} end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
       |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:close, fn _ -> :ok end)
-      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_port} end)
-      |> expect(:send, fn _, _ ->
-        send(parent, {ref, :send})
+      |> expect(:close, fn _ ->
+        send(me, :closed)
         :ok
       end)
 
-      pid =
-        start_link_supervised!(
-          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
-          restart: :temporary
-        )
+      :ok = Modbuzz.TCP.Client.cast(req)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
-      assert Modbuzz.TCP.Client.cast(request) == :ok
+      send(pid, {:tcp, dummy_socket, to_binary(res)})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
 
-      send(pid, {:tcp_closed, dummy_port})
-
-      assert_receive({^ref, :send})
+      send(pid, {:tcp_closed, dummy_socket})
+      assert_receive(:closed)
     end
 
-    test "message {:tcp_error, socket, reason}", %{parent: parent, ref: ref} do
-      dummy_port = make_ref()
+    test "message {:tcp_closed, socket}", %{
+      pid: pid,
+      req: req
+    } do
+      dummy_socket = make_ref()
+      me = self()
 
       Modbuzz.TCP.TransportMock
-      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_port} end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
       |> expect(:send, fn _, _ -> :ok end)
-      |> expect(:close, fn _ -> :ok end)
-      # confirm {:continue, :connect}
-      |> expect(:connect, fn _, _, _, _ ->
-        send(parent, {ref, :connect})
-        {:ok, dummy_port}
+      |> expect(:close, fn _ ->
+        send(me, :closed)
+        :ok
       end)
 
-      pid =
-        start_link_supervised!(
-          {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock, active: true},
-          restart: :temporary
-        )
+      :ok = Modbuzz.TCP.Client.cast(req)
 
-      request = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
-      assert Modbuzz.TCP.Client.cast(request) == :ok
+      send(pid, {:tcp_closed, dummy_socket})
+      assert_receive(:closed)
+    end
 
-      send(pid, {:tcp_error, dummy_port, :reason})
+    test "message {:tcp_error, socket, reason}", %{
+      pid: pid,
+      req: req
+    } do
+      dummy_socket = make_ref()
+      me = self()
 
-      assert_receive({^ref, :connect})
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+      |> expect(:close, fn _ ->
+        send(me, :closed)
+        :ok
+      end)
+
+      :ok = Modbuzz.TCP.Client.cast(req)
+
+      send(pid, {:tcp_error, dummy_socket, :reason})
+      assert_receive(:closed)
+    end
+
+    test "message {:tcp, socket, binary}, invalid length closes socket", %{
+      pid: pid,
+      req: req
+    } do
+      dummy_socket = make_ref()
+      me = self()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+      |> expect(:close, fn _ ->
+        send(me, :closed)
+        :ok
+      end)
+
+      :ok = Modbuzz.TCP.Client.cast(req)
+
+      send(pid, {:tcp, dummy_socket, <<0::16, 0::16, 0::16>>})
+      assert_receive(:closed)
     end
   end
 
-  defp read_coils_recv_adu(transaction_id, error \\ false) do
-    if error do
-      %Modbuzz.PDU.ReadCoils.Err{exception_code: 0x01}
-    else
-      %Modbuzz.PDU.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
-    end
-    |> Modbuzz.PDU.encode()
-    |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
-    |> Modbuzz.TCP.ADU.encode()
-  end
-
-  defp write_single_coil_recv_adu(transaction_id, error \\ false) do
-    if error do
-      %Modbuzz.PDU.WriteSingleCoil.Err{exception_code: 0x01}
-    else
-      %Modbuzz.PDU.WriteSingleCoil.Res{output_address: 0x0016, output_value: true}
-    end
-    |> Modbuzz.PDU.encode()
+  defp to_binary(pdu, transaction_id \\ 0x0001) do
+    pdu
     |> Modbuzz.TCP.ADU.new(transaction_id, _unit_id = 0)
     |> Modbuzz.TCP.ADU.encode()
   end

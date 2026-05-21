@@ -3,15 +3,24 @@ defmodule Modbuzz.TCP.Client do
 
   use GenServer
 
+  alias Modbuzz.TCP.ADU
   alias Modbuzz.TCP.Log
+
+  @unit_id_max 255
+
+  defguardp is_valid_unit_id(unit_id) when unit_id >= 0 and unit_id <= @unit_id_max
 
   defmodule Transaction do
     @moduledoc false
-    defstruct [:unit_id, :request, :from_pid, :sent_time]
+    @type t :: %__MODULE__{
+            call_or_cast: :call | :cast,
+            unit_id: 0x00..0xFF,
+            request: Modbuzz.PDU.Protocol.t(),
+            from_or_pid: GenServer.from() | pid() | nil,
+            ref: reference()
+          }
+    defstruct [:call_or_cast, :unit_id, :request, :from_or_pid, :ref]
   end
-
-  alias Modbuzz.PDU
-  alias Modbuzz.TCP.ADU
 
   @doc """
   Starts a #{__MODULE__} GenServer process linked to the current process.
@@ -25,22 +34,20 @@ defmodule Modbuzz.TCP.Client do
 
     * `:port` - passed through to `:gen_tcp.connect/4`
 
-    * `:active` - passed through to `:gen_tcp.connect/4`
-
   ## Examples
 
-      iex> Modbuzz.TCP.Client.start_link([address: {192, 168, 0, 123}, port: 502, active: false])
+      iex> Modbuzz.TCP.Client.start_link([name: :client, address: {192, 168, 0, 123}, port: 502])
 
   """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(args) when is_list(args) do
     name = Keyword.get(args, :name, __MODULE__)
+    args = Keyword.put_new(args, :name, name)
     GenServer.start_link(__MODULE__, args, name: name)
   end
 
   @doc """
   Makes a synchronous call to the server and waits for a response.
-  Only available when active: false.
 
   The response type is `{:ok, %Res{}}` or `{:error, %Err{} | reason :: term()}`.
 
@@ -57,7 +64,7 @@ defmodule Modbuzz.TCP.Client do
           GenServer.server(),
           unit_id :: 0x00..0xFF,
           request :: Modbuzz.PDU.Protocol.t(),
-          timeout()
+          non_neg_integer()
         ) ::
           {:ok, response :: term()} | {:error, reason :: term()}
   def call(name \\ __MODULE__, unit_id \\ 0, request, timeout \\ 5000)
@@ -67,7 +74,6 @@ defmodule Modbuzz.TCP.Client do
 
   @doc """
   Casts a request to the server without waiting for a response.
-  Only available when active: true.
 
   This function always returns :ok regardless of whether the destination server (or node) exists.
   Therefore it is unknown whether the destination server successfully handled the request.
@@ -75,7 +81,7 @@ defmodule Modbuzz.TCP.Client do
   Its response is sent as a meessage, looks like
 
   ```
-  {:modbuzz, unit_id, request, response}
+  {:modbuzz, client_name, unit_id, request, response_tuple}
   ```
 
   The response type is `{:ok, %Res{}}` or `{:error, %Err{} | reason :: term()}`.
@@ -93,258 +99,219 @@ defmodule Modbuzz.TCP.Client do
           GenServer.server(),
           unit_id :: 0x00..0xFF,
           request :: Modbuzz.PDU.Protocol.t(),
-          pid()
+          pid(),
+          non_neg_integer()
         ) ::
           :ok
-  def cast(name \\ __MODULE__, unit_id \\ 0, request, from_pid \\ self())
-      when unit_id in 0x00..0xFF and is_struct(request) and is_pid(from_pid) do
-    GenServer.cast(name, {:cast, unit_id, request, from_pid})
+  def cast(name \\ __MODULE__, unit_id \\ 0, request, pid \\ self(), timeout \\ 5000)
+      when unit_id in 0x00..0xFF and is_struct(request) and is_pid(pid) and is_integer(timeout) do
+    GenServer.cast(name, {:cast, unit_id, request, pid, timeout})
   end
 
   @impl true
   def init(args) when is_list(args) do
+    client_name = Keyword.fetch!(args, :name)
     transport = Keyword.get(args, :transport, :gen_tcp)
     address = Keyword.get(args, :address, {192, 168, 5, 57})
     port = Keyword.get(args, :port, 502)
-    active = Keyword.get(args, :active, false)
 
     state = %{
+      client_name: client_name,
       transport: transport,
       address: address,
       port: port,
-      active: active,
       socket: nil,
       transaction_id: 0,
-      transactions: %{}
+      transactions: %{},
+      binary: <<>>
     }
 
-    {:ok, state, {:continue, :connect}}
+    {:ok, state}
   end
 
   @impl true
-  def handle_continue(:connect, %{socket: nil} = state) do
-    case gen_tcp_connect(state) do
+  def handle_call({:call, unit_id, request, timeout}, from, state)
+      when is_valid_unit_id(unit_id) do
+    handle_req({:call, unit_id, request, from, timeout}, state)
+  end
+
+  @impl true
+  def handle_cast({:cast, unit_id, request, pid, timeout}, state)
+      when is_valid_unit_id(unit_id) and is_pid(pid) do
+    handle_req({:cast, unit_id, request, pid, timeout}, state)
+  end
+
+  defp handle_req({call_or_cast, unit_id, request, from_or_pid, timeout}, state) do
+    %{
+      client_name: client_name,
+      transport: transport,
+      transaction_id: transaction_id,
+      transactions: transactions
+    } = state
+
+    transaction_id = ADU.increment_transaction_id(transaction_id)
+
+    transaction = %Transaction{
+      call_or_cast: call_or_cast,
+      unit_id: unit_id,
+      request: request,
+      from_or_pid: from_or_pid,
+      ref: make_ref()
+    }
+
+    timer = Process.send_after(self(), {:timeout?, transaction_id, transaction}, timeout)
+
+    case connect(state, timeout) do
       {:ok, socket} ->
-        Log.debug(":connect succeeded", state)
-        {:noreply, %{state | socket: socket}}
+        binary = request |> ADU.new(transaction_id, unit_id) |> ADU.encode()
 
-      {:error, reason} ->
-        Log.error(":connect failed", reason, state)
-        {:noreply, state, {:continue, :connect}}
-    end
-  end
+        case transport.send(socket, binary) do
+          :ok ->
+            transactions = Map.put(transactions, transaction_id, transaction)
 
-  def handle_continue({:recall, unit_id, request, timeout, from}, %{socket: nil} = state) do
-    %{transport: transport, transaction_id: transaction_id} = state
+            {:noreply,
+             %{
+               state
+               | socket: socket,
+                 transaction_id: transaction_id,
+                 transactions: transactions
+             }}
 
-    transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
-
-    state = %{state | transaction_id: transaction_id}
-
-    with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
-         {:send, :ok} <- {:send, transport.send(socket, adu)},
-         {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [res_tuple] =
-        for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
-          PDU.decode_response(pdu)
+          {:error, reason} ->
+            Log.error("#{inspect(transport)} send error", reason, state)
+            Process.cancel_timer(timer)
+            :ok = transport.close(socket)
+            res_tuple = {:error, :tcp_send_error}
+            maybe_report_response(transaction, client_name, res_tuple)
+            {:noreply, %{state | socket: nil, binary: <<>>}}
         end
 
-      GenServer.reply(from, res_tuple)
-      {:noreply, %{state | socket: socket}}
-    else
-      {:connect, {:error, reason} = error} ->
-        Log.error(":recall connect failed", reason, state)
-        GenServer.reply(from, error)
-        {:noreply, state, {:continue, :connect}}
-
-      {:send, {:error, reason} = error} ->
-        Log.error(":recall send failed", reason, state)
-        GenServer.reply(from, error)
-        {:noreply, state, {:continue, :connect}}
-
-      {:recv, {:error, reason} = error} ->
-        Log.error(":recall recv failed", reason, state)
-        GenServer.reply(from, error)
-        {:noreply, state, {:continue, :connect}}
+      {:error, reason} ->
+        Log.error("#{inspect(transport)} connect error", reason, state)
+        Process.cancel_timer(timer)
+        res_tuple = {:error, :tcp_connect_error}
+        maybe_report_response(transaction, client_name, res_tuple)
+        {:noreply, %{state | socket: nil, binary: <<>>}}
     end
   end
 
-  def handle_continue({:recast, unit_id, request, from_pid}, %{socket: nil} = state) do
+  @impl true
+  def handle_info({:timeout?, transaction_id, %Transaction{ref: ref}}, state) do
     %{
+      client_name: client_name,
+      transactions: transactions
+    } = state
+
+    case Map.get(transactions, transaction_id) do
+      # already responded
+      nil ->
+        {:noreply, state}
+
+      # timeout for the current request, report timeout error
+      %Transaction{request: request, ref: ref_} = transaction when ref_ == ref ->
+        Log.error("TCP server didn't respond for #{inspect(request)}", nil, state)
+        res_tuple = {:error, :timeout}
+        maybe_report_response(transaction, client_name, res_tuple)
+        {:noreply, %{state | transactions: Map.delete(transactions, transaction_id)}}
+
+      # the current request is different, do not report timeout error
+      # this means the request that triggered this timeout message has already been responded to
+      # and a new request for the same transaction_id has been sent after that
+      %Transaction{ref: ref_} when ref_ != ref ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_info({:tcp, socket, binary}, state) do
+    %{
+      client_name: client_name,
+      transport: transport,
+      transactions: transactions
+    } = state
+
+    new_binary = state.binary <> binary
+
+    case ADU.decode_response(new_binary, []) do
+      {:ok, {adu_tuples, binary}} ->
+        transactions =
+          Enum.reduce(
+            adu_tuples,
+            transactions,
+            fn {ok_or_error, %ADU{transaction_id: transaction_id, pdu: pdu}}, acc ->
+              {transaction, acc} = Map.pop(acc, transaction_id)
+              res_tuple = {ok_or_error, pdu}
+              maybe_report_response(transaction, client_name, res_tuple)
+              acc
+            end
+          )
+
+        {:noreply, %{state | transactions: transactions, binary: binary}}
+
+      {:error, reason} ->
+        Log.error("invalid response", reason, state)
+        transport.close(socket)
+        {:noreply, %{state | socket: nil, binary: <<>>}}
+    end
+  end
+
+  def handle_info({:tcp_closed, socket}, state) do
+    %{
+      client_name: client_name,
       transport: transport,
       transaction_id: transaction_id,
       transactions: transactions
     } = state
 
-    transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
+    Log.error("#{inspect(transport)} closed", nil, state)
+    if not is_nil(socket), do: :ok = transport.close(socket)
 
-    state = %{state | transaction_id: transaction_id}
-
-    with {:connect, {:ok, socket}} <- {:connect, gen_tcp_connect(state)},
-         {:send, :ok} <- {:send, transport.send(socket, adu)} do
-      transaction = %Transaction{
-        unit_id: unit_id,
-        request: request,
-        from_pid: from_pid,
-        sent_time: System.monotonic_time(:millisecond)
-      }
-
-      transactions = Map.put(transactions, transaction_id, transaction)
-      {:noreply, %{state | socket: socket, transactions: transactions}}
-    else
-      {:connect, {:error, reason}} ->
-        Log.error(":recast connect failed", reason, state)
-        {:noreply, state, {:continue, :connect}}
-
-      {:send, {:error, reason}} ->
-        Log.error(":recast send failed", reason, state)
-        {:noreply, state, {:continue, :connect}}
-    end
+    {transaction, transactions} = Map.pop(transactions, transaction_id)
+    res_tuple = {:error, :tcp_closed}
+    maybe_report_response(transaction, client_name, res_tuple)
+    {:noreply, %{state | socket: nil, binary: <<>>, transactions: transactions}}
   end
 
-  @impl true
-  def handle_call({:call, unit_id, request, timeout}, from, %{active: false} = state) do
-    %{transport: transport, socket: socket, transaction_id: transaction_id} = state
-
-    transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
-
-    state = %{state | transaction_id: transaction_id}
-
-    with {:send, :ok} <- {:send, transport.send(socket, adu)},
-         {:recv, {:ok, binary}} <- {:recv, transport.recv(socket, _length = 0, timeout)} do
-      [res_tuple] =
-        for %ADU{transaction_id: ^transaction_id, pdu: pdu} <- ADU.decode(binary, []) do
-          PDU.decode_response(pdu)
-        end
-
-      {:reply, res_tuple, state}
-    else
-      {:send, {:error, reason}} ->
-        Log.warning(":call send failed, :recall", reason, state)
-
-        :ok = transport.close(socket)
-        state = %{state | socket: nil}
-        {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
-
-      {:recv, {:error, reason}} ->
-        Log.warning(":call recv failed, :recall", reason, state)
-
-        :ok = transport.close(socket)
-        state = %{state | socket: nil}
-        {:noreply, state, {:continue, {:recall, unit_id, request, timeout, from}}}
-    end
-  end
-
-  def handle_call({:call, _unit_id, _request, _timeout}, _from, %{active: true} = _state) do
-    raise RuntimeError, message: "call can't be used when active is true."
-  end
-
-  @impl true
-  def handle_cast({:cast, unit_id, request, from_pid}, %{active: true} = state) do
-    %{
-      transport: transport,
-      socket: socket,
-      transaction_id: transaction_id,
-      transactions: transactions
-    } = state
-
-    transaction_id = ADU.increment_transaction_id(transaction_id)
-    adu = PDU.encode(request) |> ADU.new(transaction_id, unit_id) |> ADU.encode()
-
-    state = %{state | transaction_id: transaction_id}
-
-    case transport.send(socket, adu) do
-      :ok ->
-        transaction = %Transaction{
-          unit_id: unit_id,
-          request: request,
-          from_pid: from_pid,
-          sent_time: System.monotonic_time(:millisecond)
-        }
-
-        transactions = Map.put(transactions, transaction_id, transaction)
-        {:noreply, %{state | transactions: transactions}}
-
-      {:error, reason} ->
-        Log.warning(":cast send failed, :recast", reason, state)
-
-        :ok = transport.close(socket)
-        state = %{state | socket: nil}
-        {:noreply, state, {:continue, {:recast, unit_id, request, from_pid}}}
-    end
-  end
-
-  def handle_cast({:cast, _unit_id, _request, _from_pid}, %{active: false} = _state) do
-    raise RuntimeError, message: "cast can't be used when active is false."
-  end
-
-  @impl true
-  def handle_info({:tcp, socket, binary}, %{socket: socket} = state) do
-    %{transactions: transactions} = state
-
-    transactions =
-      ADU.decode(binary, [])
-      |> Enum.reduce(transactions, fn %ADU{transaction_id: transaction_id, pdu: pdu}, acc ->
-        {transaction, acc} = Map.pop(acc, transaction_id)
-        res_tuple = PDU.decode_response(pdu)
-
-        send(
-          transaction.from_pid,
-          {
-            :modbuzz,
-            transaction.unit_id,
-            transaction.request,
-            res_tuple
-          }
-        )
-
-        acc
-      end)
-
-    {:noreply, %{state | transactions: transactions}}
-  end
-
-  def handle_info({:tcp_closed, socket}, %{socket: socket, active: true} = state) do
-    %{transport: transport, transactions: transactions} = state
-
-    Log.warning("transport closed.", nil, state)
-    :ok = transport.close(socket)
-    state = %{state | socket: nil}
-
-    transactions
-    |> Enum.filter(fn {_transaction_id, transaction} ->
-      System.monotonic_time(:millisecond) - transaction.sent_time < 10
-    end)
-    |> case do
-      [] ->
-        {:noreply, state, {:continue, :connect}}
-
-      [{_transaction_id, transaction}] ->
-        Log.debug("sent successfully but RST ACK received, :recast", state)
-
-        {:noreply, state,
-         {:continue, {:recast, transaction.unit_id, transaction.request, transaction.from_pid}}}
-    end
-  end
-
-  def handle_info({:tcp_error, socket, reason}, %{socket: socket, active: true} = state) do
+  def handle_info({:tcp_error, socket, reason}, state) do
     %{transport: transport} = state
     Log.error("transport error", reason, state)
-    :ok = transport.close(socket)
-    {:noreply, %{state | socket: nil}, {:continue, :connect}}
+    if not is_nil(socket), do: :ok = transport.close(socket)
+    {:noreply, %{state | socket: nil, binary: <<>>}}
   end
 
-  defp gen_tcp_connect(state) do
-    %{transport: transport, address: address, port: port, active: active} = state
+  defp connect(state, timeout) do
+    %{transport: transport, address: address, port: port, socket: socket} = state
 
-    transport.connect(
-      address,
-      port,
-      [mode: :binary, packet: :raw, active: active],
-      _timeout = 3000
-    )
+    if is_nil(socket) do
+      transport.connect(
+        address,
+        port,
+        [
+          mode: :binary,
+          packet: :raw,
+          active: true,
+          keepalive: true,
+          nodelay: true,
+          reuseaddr: true
+        ],
+        timeout
+      )
+    else
+      {:ok, socket}
+    end
+  end
+
+  defp maybe_report_response(transaction, client_name, res_tuple) do
+    case transaction do
+      nil ->
+        :noop
+
+      %{call_or_cast: :call, unit_id: _unit_id, request: _request, from_or_pid: from}
+      when is_tuple(from) ->
+        GenServer.reply(from, res_tuple)
+
+      %{call_or_cast: :cast, unit_id: unit_id, request: request, from_or_pid: pid}
+      when is_pid(pid) ->
+        send(pid, {:modbuzz, client_name, unit_id, request, res_tuple})
+    end
   end
 end

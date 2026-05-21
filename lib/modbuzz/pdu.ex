@@ -1,6 +1,10 @@
 defmodule Modbuzz.PDU do
   @moduledoc false
 
+  @max_frame_length 253
+
+  def max_frame_length, do: @max_frame_length
+
   defdelegate encode(struct), to: Modbuzz.PDU.Protocol, as: :encode
 
   for {modbus_function_code, modbus_function} <- Modbuzz.MixProject.pdu_seed() do
@@ -32,6 +36,14 @@ defmodule Modbuzz.PDU do
     def response_length(<<unquote(modbus_error_code), _rest::binary>> = binary) do
       {:ok, Modbuzz.PDU.Protocol.expected_binary_size(%unquote(err_module){}, binary)}
     end
+  end
+
+  def decode_request(<<modbus_function_code, _rest::binary>>) do
+    {:error, {:unknown_function_code, modbus_function_code}}
+  end
+
+  def decode_response(<<modbus_function_code, _rest::binary>>) do
+    {:error, {:unknown_function_code, modbus_function_code}}
   end
 
   # NOTE: We need this fallback, because the binary is not always guaranteed to be correct.

@@ -211,9 +211,7 @@ defmodule Modbuzz.TCP.Client do
       %Transaction{request: request, ref: ref_} = transaction when ref_ == ref ->
         Log.error("TCP server didn't respond for #{inspect(request)}", nil, state)
         res_tuple = {:error, :timeout}
-
         maybe_report_response(transaction, client_name, res_tuple)
-
         {:noreply, %{state | transactions: Map.delete(transactions, transaction_id)}}
 
       # the current request is different, do not report timeout error
@@ -224,7 +222,7 @@ defmodule Modbuzz.TCP.Client do
     end
   end
 
-  def handle_info({:tcp, socket, binary}, %{socket: socket} = state) do
+  def handle_info({:tcp, _socket, binary}, state) do
     %{
       client_name: client_name,
       transactions: transactions
@@ -249,17 +247,17 @@ defmodule Modbuzz.TCP.Client do
     {:noreply, %{state | transactions: transactions, binary: binary}}
   end
 
-  def handle_info({:tcp_closed, socket}, %{socket: socket} = state) do
+  def handle_info({:tcp_closed, socket}, state) do
     %{transport: transport} = state
     Log.warning("#{inspect(transport)} closed", nil, state)
-    :ok = transport.close(socket)
+    if not is_nil(socket), do: :ok = transport.close(socket)
     {:noreply, %{state | socket: nil, binary: <<>>}}
   end
 
-  def handle_info({:tcp_error, socket, reason}, %{socket: socket} = state) do
+  def handle_info({:tcp_error, socket, reason}, state) do
     %{transport: transport} = state
     Log.error("transport error", reason, state)
-    :ok = transport.close(socket)
+    if not is_nil(socket), do: :ok = transport.close(socket)
     {:noreply, %{state | socket: nil, binary: <<>>}}
   end
 

@@ -86,8 +86,8 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      task = Task.async(fn -> GenServer.call(name, {:call, unit_id, req, 100}) end)
-      assert Task.await(task) == {:error, :crc_error}
+      task = Task.async(fn -> GenServer.call(name, {:call, unit_id, req, 10}) end)
+      assert Task.await(task) == {:error, :timeout}
     end
 
     test "return :error tuple, modbus error response", %{
@@ -227,8 +227,8 @@ defmodule Modbuzz.RTU.ClientTest do
         :ok
       end)
 
-      GenServer.cast(name, {:cast, unit_id, req, self(), 100})
-      assert_receive {:modbuzz, :client, ^unit_id, ^req, {:error, :crc_error}}
+      GenServer.cast(name, {:cast, unit_id, req, self(), 10})
+      assert_receive {:modbuzz, :client, ^unit_id, ^req, {:error, :timeout}}
     end
 
     test "return :error tuple, server device busy", %{

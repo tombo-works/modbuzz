@@ -13,10 +13,14 @@ defmodule Modbuzz.TCP.ADU do
         }
   defstruct transaction_id: 0x0000, protocol_id: 0x0000, length: 0x0000, unit_id: 0x00, pdu: nil
 
-  defguardp is_modbus_protocol(protocol_id) when protocol_id == 0x0000
-  defguardp is_valid_length(length) when 1 <= length and length <= 0x00FE
-
+  @unit_id_length 1
+  @function_code_length 1
   @mbap_length 7
+
+  defguardp is_modbus_protocol(protocol_id) when protocol_id == 0x0000
+
+  defguardp is_valid_length(length)
+            when @unit_id_length + @function_code_length <= length and length <= 0x00FE
 
   def max_frame_length, do: @mbap_length + PDU.max_frame_length()
 
@@ -41,21 +45,33 @@ defmodule Modbuzz.TCP.ADU do
       adu.unit_id, pdu_binary::binary-size(pdu_binary_length)>>
   end
 
+  @spec decode_request(binary :: binary(), list()) ::
+          {:ok, {[{:ok, t()}], binary()}}
+          | {:error, {:adu_invalid_protocol, non_neg_integer()}}
+          | {:error, {:adu_invalid_length, non_neg_integer()}}
+          | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
   def decode_request(
         <<_transaction_id::16, protocol_id::16, length::16, _rest::binary>> = binary,
         acc
       )
       when is_modbus_protocol(protocol_id) and is_valid_length(length) do
+    # trnsaction_id: 2 bytes
+    # protcol_id:        2 bytes
+    # length:                2 bytes
     adu_frame_size = 2 + 2 + 2 + length
 
-    if byte_size(binary) >= adu_frame_size do
+    if byte_size(binary) < adu_frame_size do
+      {:ok, {Enum.reverse(acc), binary}}
+    else
       <<adu_binary::binary-size(adu_frame_size), rest::binary>> = binary
 
-      adu = decode_request(adu_binary)
+      case decode_request(adu_binary) do
+        {:error, {:pdu_unknown_function_code, _}} = error ->
+          error
 
-      decode_request(rest, [adu | acc])
-    else
-      {:ok, {Enum.reverse(acc), binary}}
+        adu_tuple ->
+          decode_request(rest, [adu_tuple | acc])
+      end
     end
   end
 
@@ -64,7 +80,7 @@ defmodule Modbuzz.TCP.ADU do
         _acc
       )
       when not is_modbus_protocol(protocol_id) do
-    {:error, {:invalid_protocol, protocol_id}}
+    {:error, {:adu_invalid_protocol, protocol_id}}
   end
 
   def decode_request(
@@ -72,28 +88,40 @@ defmodule Modbuzz.TCP.ADU do
         _acc
       )
       when not is_valid_length(length) do
-    {:error, {:invalid_length, length}}
+    {:error, {:adu_invalid_length, length}}
   end
 
   def decode_request(binary, acc) do
     {:ok, {Enum.reverse(acc), binary}}
   end
 
+  @spec decode_response(binary :: binary(), list()) ::
+          {:ok, {[{:ok, t()} | {:error, t()}], binary()}}
+          | {:error, {:adu_invalid_protocol, non_neg_integer()}}
+          | {:error, {:adu_invalid_length, non_neg_integer()}}
+          | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
   def decode_response(
         <<_transaction_id::16, protocol_id::16, length::16, _rest::binary>> = binary,
         acc
       )
       when is_modbus_protocol(protocol_id) and is_valid_length(length) do
+    # trnsaction_id: 2 bytes
+    # protcol_id:        2 bytes
+    # length:                2 bytes
     adu_frame_size = 2 + 2 + 2 + length
 
-    if byte_size(binary) >= adu_frame_size do
+    if byte_size(binary) < adu_frame_size do
+      {:ok, {Enum.reverse(acc), binary}}
+    else
       <<adu_binary::binary-size(adu_frame_size), rest::binary>> = binary
 
-      adu = decode_response(adu_binary)
+      case decode_response(adu_binary) do
+        {:error, {:pdu_unknown_function_code, _}} = error ->
+          error
 
-      decode_response(rest, [adu | acc])
-    else
-      {:ok, {Enum.reverse(acc), binary}}
+        adu_tuple ->
+          decode_response(rest, [adu_tuple | acc])
+      end
     end
   end
 
@@ -102,7 +130,7 @@ defmodule Modbuzz.TCP.ADU do
         _acc
       )
       when not is_modbus_protocol(protocol_id) do
-    {:error, {:invalid_protocol, protocol_id}}
+    {:error, {:adu_invalid_protocol, protocol_id}}
   end
 
   def decode_response(
@@ -110,13 +138,16 @@ defmodule Modbuzz.TCP.ADU do
         _acc
       )
       when not is_valid_length(length) do
-    {:error, {:invalid_length, length}}
+    {:error, {:adu_invalid_length, length}}
   end
 
   def decode_response(binary, acc) do
     {:ok, {Enum.reverse(acc), binary}}
   end
 
+  @spec decode_request(binary :: binary()) ::
+          {:ok, t()}
+          | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
   defp decode_request(
          <<transaction_id::16, protocol_id::16, length::16, unit_id,
            pdu_binary::binary-size(length - 1)>>
@@ -130,11 +161,15 @@ defmodule Modbuzz.TCP.ADU do
     }
 
     case PDU.decode_request(pdu_binary) do
-      {:ok, pdu} -> {:ok, %{adu | pdu: pdu}}
-      {:error, pdu} -> {:error, %{adu | pdu: pdu}}
+      {:ok, pdu} when is_struct(pdu) -> {:ok, %{adu | pdu: pdu}}
+      {:error, {:pdu_unknown_function_code, _}} = error -> error
     end
   end
 
+  @spec decode_response(binary :: binary()) ::
+          {:ok, t()}
+          | {:error, t()}
+          | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
   defp decode_response(
          <<transaction_id::16, protocol_id::16, length::16, unit_id,
            pdu_binary::binary-size(length - 1)>>
@@ -148,8 +183,9 @@ defmodule Modbuzz.TCP.ADU do
     }
 
     case PDU.decode_response(pdu_binary) do
-      {:ok, pdu} -> {:ok, %{adu | pdu: pdu}}
-      {:error, pdu} -> {:error, %{adu | pdu: pdu}}
+      {:ok, pdu} when is_struct(pdu) -> {:ok, %{adu | pdu: pdu}}
+      {:error, pdu} when is_struct(pdu) -> {:error, %{adu | pdu: pdu}}
+      {:error, {:pdu_unknown_function_code, _}} = error -> error
     end
   end
 end

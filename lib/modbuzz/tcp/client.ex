@@ -78,7 +78,7 @@ defmodule Modbuzz.TCP.Client do
   This function always returns :ok regardless of whether the destination server (or node) exists.
   Therefore it is unknown whether the destination server successfully handled the request.
 
-  Its response is sent as a meessage, looks like
+  Its response is sent as a message, looks like
 
   ```
   {:modbuzz, client_name, unit_id, request, response_tuple}
@@ -248,7 +248,7 @@ defmodule Modbuzz.TCP.Client do
         {:noreply, %{state | transactions: transactions, binary: binary}}
 
       {:error, reason} ->
-        Log.error("invalid response", reason, state)
+        Log.error("decode error", reason, state)
         transport.close(socket)
         {:noreply, %{state | socket: nil, binary: <<>>}}
     end
@@ -258,24 +258,34 @@ defmodule Modbuzz.TCP.Client do
     %{
       client_name: client_name,
       transport: transport,
-      transaction_id: transaction_id,
       transactions: transactions
     } = state
 
     Log.error("#{inspect(transport)} closed", nil, state)
     if not is_nil(socket), do: :ok = transport.close(socket)
 
-    {transaction, transactions} = Map.pop(transactions, transaction_id)
-    res_tuple = {:error, :tcp_closed}
-    maybe_report_response(transaction, client_name, res_tuple)
-    {:noreply, %{state | socket: nil, binary: <<>>, transactions: transactions}}
+    Enum.each(transactions, fn {_transaction_id, transaction} ->
+      maybe_report_response(transaction, client_name, {:error, :tcp_closed})
+    end)
+
+    {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
   end
 
   def handle_info({:tcp_error, socket, reason}, state) do
-    %{transport: transport} = state
+    %{
+      client_name: client_name,
+      transport: transport,
+      transactions: transactions
+    } = state
+
     Log.error("transport error", reason, state)
     if not is_nil(socket), do: :ok = transport.close(socket)
-    {:noreply, %{state | socket: nil, binary: <<>>}}
+
+    Enum.each(transactions, fn {_transaction_id, transaction} ->
+      maybe_report_response(transaction, client_name, {:error, :tcp_error})
+    end)
+
+    {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
   end
 
   defp connect(state, timeout) do

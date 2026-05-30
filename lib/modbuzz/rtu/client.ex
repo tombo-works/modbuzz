@@ -18,7 +18,7 @@ defmodule Modbuzz.RTU.Client do
   def init(args) do
     client_name = Keyword.fetch!(args, :name)
     transport = Keyword.get(args, :transport, Circuits.UART)
-    transport_opts = Keyword.get(args, :transport_opts, []) ++ [active: true]
+    transport_opts = args |> Keyword.get(:transport_opts, []) |> Keyword.put(:active, true)
     device_name = Keyword.fetch!(args, :device_name)
 
     {:ok, transport_pid} = transport.start_link([])
@@ -41,7 +41,7 @@ defmodule Modbuzz.RTU.Client do
       reqs: reqs
     } = state
 
-    Log.error("RTU client terminated, #{inspect(reason)}.", nil, state)
+    Log.error("RTU client terminated", reason, state)
 
     # All pending requests should be notified of the error
     Enum.each(reqs, fn {_unit_id, req} ->
@@ -67,16 +67,13 @@ defmodule Modbuzz.RTU.Client do
       reqs: reqs
     } = state
 
-    req = Map.get(reqs, unit_id)
-    adu = ADU.new(request, unit_id)
     new_req = {call_or_cast, unit_id, request, from_or_pid, make_ref()}
-
     timer = Process.send_after(self(), {:timeout?, new_req}, timeout)
 
-    with true <- is_nil(req) || {:error, :another_request_in_progress},
-         binary <- ADU.encode(adu),
+    with true <- is_nil(Map.get(reqs, unit_id)) || {:error, :another_request_in_progress},
+         binary = request |> ADU.new(unit_id) |> ADU.encode(),
          :ok <- transport.write(transport_pid, binary, timeout) do
-      {:noreply, %{state | reqs: Map.put(reqs, adu.unit_id, new_req)}}
+      {:noreply, %{state | reqs: Map.put(reqs, unit_id, new_req)}}
     else
       {:error, :another_request_in_progress} = res_tuple ->
         Process.cancel_timer(timer)
@@ -84,7 +81,7 @@ defmodule Modbuzz.RTU.Client do
         {:noreply, state}
 
       {:error, reason} = res_tuple ->
-        Log.error("#{inspect(transport)} write error, #{inspect(reason)}.", nil, state)
+        Log.error("#{inspect(transport)} write error", reason, state)
         Process.cancel_timer(timer)
         maybe_report_response(new_req, client_name, res_tuple)
         {:noreply, state}
@@ -97,16 +94,14 @@ defmodule Modbuzz.RTU.Client do
       reqs: reqs
     } = state
 
-    req = Map.get(reqs, unit_id)
-
-    case req do
+    case Map.get(reqs, unit_id) do
       # already responded
       nil ->
         {:noreply, state}
 
       # timeout for the current request, report timeout error
       {_, unit_id_, request_, _, ref_} = req_ when ref_ == ref ->
-        Log.error("RTU server didn't respond for #{inspect(request_)}.", nil, state)
+        Log.error("RTU server didn't respond for #{inspect(request_)}", nil, state)
         res_tuple = {:error, :timeout}
 
         maybe_report_response(req_, client_name, res_tuple)
@@ -141,27 +136,23 @@ defmodule Modbuzz.RTU.Client do
 
         {:noreply, %{state | reqs: Map.put(reqs, unit_id, nil), binary: <<>>}}
 
-      {:error, :binary_is_short} ->
+      {:error, {:pdu_unknown_function_code, _} = reason} ->
+        # No response is sent to the requester; the pending request will eventually time out.
+        Log.error("Decode error", reason, state)
+        {:noreply, %{state | binary: <<>>}}
+
+      {:error, :adu_binary_is_short} ->
         {:noreply, %{state | binary: new_binary}}
 
-      {:error, :unknown} ->
+      {:error, :adu_binary_is_long = reason} ->
         # No response is sent to the requester; the pending request will eventually time out.
-        Log.error("Failed to decode ADU, unknown binary format.", nil, state)
+        Log.error("Decode error", reason, state)
         {:noreply, %{state | binary: <<>>}}
 
-      {:error, :binary_is_long} ->
+      {:error, :adu_crc_error = reason} ->
         # No response is sent to the requester; the pending request will eventually time out.
-        Log.error("Failed to decode ADU, binary is too long.", nil, state)
+        Log.warning("Decode error", reason, state)
         {:noreply, %{state | binary: <<>>}}
-
-      {:error, %ADU{unit_id: unit_id, crc_valid?: false} = adu} ->
-        Log.warning("CRC error detected, #{inspect(adu)}.", nil, state)
-        res_tuple = {:error, :crc_error}
-        req = Map.get(reqs, unit_id)
-
-        maybe_report_response(req, client_name, res_tuple)
-
-        {:noreply, %{state | reqs: Map.put(reqs, unit_id, nil), binary: <<>>}}
 
       {:error, %ADU{unit_id: unit_id, pdu: pdu}} ->
         res_tuple = {:error, pdu}

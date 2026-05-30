@@ -7,9 +7,12 @@ defprotocol Modbuzz.PDU.Protocol do
   """
 
   @doc false
+  @spec encode(t()) :: binary()
   def encode(struct)
   @doc false
+  @spec decode(t(), binary()) :: t()
   def decode(struct, binary)
   @doc false
+  @spec expected_binary_size(t(), binary()) :: non_neg_integer()
   def expected_binary_size(struct, binary)
 end

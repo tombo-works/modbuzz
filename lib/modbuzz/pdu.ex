@@ -7,6 +7,19 @@ defmodule Modbuzz.PDU do
 
   defdelegate encode(struct), to: Modbuzz.PDU.Protocol, as: :encode
 
+  @spec decode_request(binary()) ::
+          {:ok, Modbuzz.PDU.Protocol.t()}
+          | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+  @spec decode_response(binary()) ::
+          {:ok, Modbuzz.PDU.Protocol.t()}
+          | {:error, Modbuzz.PDU.Protocol.t()}
+          | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+  @spec request_length(binary()) ::
+          {:ok, non_neg_integer()}
+          | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+  @spec response_length(binary()) ::
+          {:ok, non_neg_integer()}
+          | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
   for {modbus_function_code, modbus_function} <- Modbuzz.MixProject.pdu_seed() do
     req_module = Module.concat([Modbuzz.PDU, modbus_function, Req])
     res_module = Module.concat([Modbuzz.PDU, modbus_function, Res])
@@ -39,16 +52,21 @@ defmodule Modbuzz.PDU do
   end
 
   def decode_request(<<modbus_function_code, _rest::binary>>) do
-    {:error, {:unknown_function_code, modbus_function_code}}
+    {:error, {:pdu_unknown_function_code, modbus_function_code}}
   end
 
   def decode_response(<<modbus_function_code, _rest::binary>>) do
-    {:error, {:unknown_function_code, modbus_function_code}}
+    {:error, {:pdu_unknown_function_code, modbus_function_code}}
   end
 
   # NOTE: We need this fallback, because the binary is not always guaranteed to be correct.
-  def request_length(<<_, _rest::binary>>), do: {:error, :unknown}
-  def response_length(<<_, _rest::binary>>), do: {:error, :unknown}
+  def request_length(<<modbus_function_code, _rest::binary>>) do
+    {:error, {:pdu_unknown_function_code, modbus_function_code}}
+  end
+
+  def response_length(<<modbus_function_code, _rest::binary>>) do
+    {:error, {:pdu_unknown_function_code, modbus_function_code}}
+  end
 
   def to_error(%req{}, exception_code) do
     exception_code =

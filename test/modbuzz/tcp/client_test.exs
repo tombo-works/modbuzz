@@ -106,7 +106,7 @@ defmodule Modbuzz.TCP.ClientTest do
       req = %Modbuzz.PDU.ReadCoils.Req{starting_address: 0, quantity_of_coils: 16}
       res = %Modbuzz.PDU.ReadCoils.Res{byte_count: 0x02, coil_status: List.duplicate(false, 16)}
 
-      %{parent: self(), ref: make_ref(), req: req, res: res}
+      %{req: req, res: res}
     end
 
     test "return :ok", %{req: req, res: res} do
@@ -275,6 +275,7 @@ defmodule Modbuzz.TCP.ClientTest do
       :ok = Modbuzz.TCP.Client.cast(req)
 
       send(pid, {:tcp_closed, dummy_socket})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_closed}})
       assert_receive(:closed)
     end
 
@@ -296,6 +297,7 @@ defmodule Modbuzz.TCP.ClientTest do
       :ok = Modbuzz.TCP.Client.cast(req)
 
       send(pid, {:tcp_error, dummy_socket, :reason})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_error}})
       assert_receive(:closed)
     end
 

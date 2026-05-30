@@ -43,29 +43,24 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
         binary = state.binary <> binary
 
         case ADU.decode_request(binary, []) do
-          {:ok, {adu_tuples, binary}} ->
-            for {:ok, adu} <- adu_tuples do
-              request(data_source, adu.unit_id, adu.pdu, timeout)
-              |> ADU.new(adu.transaction_id, adu.unit_id)
-              |> ADU.encode()
-            end
-            |> Enum.reduce(<<>>, &(&2 <> &1))
-            |> then(&transport.send(socket, &1))
+          {:ok, {adu_tuples, rest_binary}} ->
+            response_binary =
+              Enum.reduce(adu_tuples, <<>>, fn {:ok, adu}, acc ->
+                response_pdu_or_nil = request(data_source, adu.unit_id, adu.pdu, timeout)
+                acc <> to_adu_binary(response_pdu_or_nil, adu.transaction_id, adu.unit_id)
+              end)
 
-            {:noreply, %{state | binary: binary}, {:continue, :recv}}
+            transport.send(socket, response_binary)
+            {:noreply, %{state | binary: rest_binary}, {:continue, :recv}}
 
           {:error, reason} ->
-            Log.error("invalid request", reason, state)
+            Log.error("decode error", reason, state)
             :ok = transport.close(socket)
-            {:stop, :invalid_length, %{state | binary: <<>>}}
+            {:stop, reason, state}
         end
 
-      {:error, :closed = reason} ->
-        :ok = transport.close(socket)
-        {:stop, reason, state}
-
       {:error, reason} ->
-        Log.error(":recv failed", reason, state)
+        Log.error("#{inspect(transport)} recv error", reason, state)
         :ok = transport.close(socket)
         {:stop, reason, state}
     end
@@ -73,8 +68,19 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
 
   defp request(data_source, unit_id, request, timeout) do
     case GenServer.call(data_source, {:call, unit_id, request, timeout}) do
-      {:ok, response} -> response
-      {:error, error} -> error
+      {:ok, pdu} when is_struct(pdu) -> pdu
+      {:error, pdu} when is_struct(pdu) -> pdu
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp to_adu_binary(pdu, transaction_id, unit_id) do
+    case pdu do
+      pdu when is_struct(pdu) ->
+        ADU.new(pdu, transaction_id, unit_id) |> ADU.encode()
+
+      nil ->
+        <<>>
     end
   end
 end

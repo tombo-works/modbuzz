@@ -15,7 +15,7 @@ defmodule Modbuzz.RTU.Server do
   @doc false
   def init(args) do
     transport = Keyword.get(args, :transport, Circuits.UART)
-    transport_opts = Keyword.get(args, :transport_opts, []) ++ [active: true]
+    transport_opts = args |> Keyword.get(:transport_opts, []) |> Keyword.put(:active, true)
     device_name = Keyword.fetch!(args, :device_name)
     data_source = Keyword.fetch!(args, :data_source)
     timeout = Keyword.get(args, :timeout, 5000)
@@ -53,19 +53,19 @@ defmodule Modbuzz.RTU.Server do
 
         {:noreply, %{state | binary: <<>>}}
 
-      {:error, :binary_is_short} ->
+      {:error, :adu_binary_is_short} ->
         {:noreply, %{state | binary: new_binary}}
 
-      {:error, :unknown} ->
-        Log.error("Failed to decode ADU, unknown binary format.", nil, state)
+      {:error, {:pdu_unknown_function_code, _} = reason} ->
+        Log.error("Decode error", reason, state)
         {:noreply, %{state | binary: <<>>}}
 
-      {:error, :binary_is_long} ->
-        Log.error("Failed to decode ADU, binary is too long.", nil, state)
+      {:error, :adu_binary_is_long = reason} ->
+        Log.error("Decode error", reason, state)
         {:noreply, %{state | binary: <<>>}}
 
-      {:error, %ADU{unit_id: _unit_id, crc_valid?: false} = adu} ->
-        Log.warning("CRC error detected, #{inspect(adu)}.", nil, state)
+      {:error, :adu_crc_error = reason} ->
+        Log.error("Decode error", reason, state)
         {:noreply, %{state | binary: <<>>}}
     end
   end

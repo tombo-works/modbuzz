@@ -222,7 +222,7 @@ defmodule Modbuzz.TCP.Client do
     end
   end
 
-  def handle_info({:tcp, socket, binary}, state) do
+  def handle_info({:tcp, socket, binary}, %{socket: socket} = state) do
     %{
       client_name: client_name,
       transport: transport,
@@ -254,7 +254,12 @@ defmodule Modbuzz.TCP.Client do
     end
   end
 
-  def handle_info({:tcp_closed, socket}, state) do
+  def handle_info({:tcp, _socket, _binary}, state) do
+    # Ignore frames from stale sockets so they cannot affect the active connection state.
+    {:noreply, state}
+  end
+
+  def handle_info({:tcp_closed, socket}, %{socket: socket} = state) do
     %{
       client_name: client_name,
       transport: transport,
@@ -271,7 +276,12 @@ defmodule Modbuzz.TCP.Client do
     {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
   end
 
-  def handle_info({:tcp_error, socket, reason}, state) do
+  def handle_info({:tcp_closed, _socket}, state) do
+    # Ignore close notifications from stale sockets.
+    {:noreply, state}
+  end
+
+  def handle_info({:tcp_error, socket, reason}, %{socket: socket} = state) do
     %{
       client_name: client_name,
       transport: transport,
@@ -286,6 +296,11 @@ defmodule Modbuzz.TCP.Client do
     end)
 
     {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
+  end
+
+  def handle_info({:tcp_error, _socket, _reason}, state) do
+    # Ignore errors from stale sockets; only the active socket should fail pending work.
+    {:noreply, state}
   end
 
   defp connect(state, timeout) do

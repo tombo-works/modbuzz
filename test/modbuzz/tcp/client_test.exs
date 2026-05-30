@@ -301,6 +301,78 @@ defmodule Modbuzz.TCP.ClientTest do
       assert_receive(:closed)
     end
 
+    test "message from stale socket {:tcp, socket, binary} is ignored", %{
+      pid: pid,
+      req: req,
+      res: res
+    } do
+      dummy_socket = make_ref()
+      stale_socket = make_ref()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+
+      :ok = Modbuzz.TCP.Client.cast(req)
+
+      send(pid, {:tcp, stale_socket, <<0::16, 0::16, 0::16>>})
+      refute_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_error}}, 10)
+
+      refute_receive(
+        {:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_closed}},
+        10
+      )
+
+      send(pid, {:tcp, dummy_socket, to_binary(res)})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
+    end
+
+    test "message from stale socket {:tcp_closed, socket} is ignored", %{
+      pid: pid,
+      req: req,
+      res: res
+    } do
+      dummy_socket = make_ref()
+      stale_socket = make_ref()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+
+      :ok = Modbuzz.TCP.Client.cast(req)
+
+      send(pid, {:tcp_closed, stale_socket})
+
+      refute_receive(
+        {:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_closed}},
+        10
+      )
+
+      send(pid, {:tcp, dummy_socket, to_binary(res)})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
+    end
+
+    test "message from stale socket {:tcp_error, socket, reason} is ignored", %{
+      pid: pid,
+      req: req,
+      res: res
+    } do
+      dummy_socket = make_ref()
+      stale_socket = make_ref()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+
+      :ok = Modbuzz.TCP.Client.cast(req)
+
+      send(pid, {:tcp_error, stale_socket, :reason})
+      refute_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_error}}, 10)
+
+      send(pid, {:tcp, dummy_socket, to_binary(res)})
+      assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:ok, ^res}})
+    end
+
     test "message {:tcp, socket, binary}, invalid length closes socket", %{
       pid: pid,
       req: req

@@ -68,7 +68,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
   end
 
   defp request(data_source, unit_id, request, timeout) do
-    case GenServer.call(data_source, {:call, unit_id, request, timeout}) do
+    case GenServer.call(data_source, {:call, unit_id, request, timeout}, timeout + 50) do
       {:ok, pdu} when is_struct(pdu) -> pdu
       {:error, pdu} when is_struct(pdu) -> pdu
       {:error, _reason} -> nil

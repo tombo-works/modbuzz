@@ -179,6 +179,34 @@ defmodule Modbuzz.TCP.ClientTest do
       assert Modbuzz.TCP.Client.cast(Modbuzz.TCP.Client, 0, req, self(), 10) == :ok
       assert_receive({:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :timeout}})
     end
+
+    test "return :ok, send error fails all pending with {:error, :tcp_send_error}", %{
+      req: req
+    } do
+      dummy_socket = make_ref()
+
+      Modbuzz.TCP.TransportMock
+      |> expect(:connect, fn _, _, _, _ -> {:ok, dummy_socket} end)
+      |> expect(:send, fn _, _ -> :ok end)
+      |> expect(:send, fn _, _ -> {:error, :closed} end)
+      |> expect(:close, fn _ -> :ok end)
+
+      start_link_supervised!(
+        {Modbuzz.TCP.Client, transport: Modbuzz.TCP.TransportMock},
+        restart: :temporary
+      )
+
+      assert Modbuzz.TCP.Client.cast(req) == :ok
+      assert Modbuzz.TCP.Client.cast(req) == :ok
+
+      assert_receive(
+        {:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_send_error}}
+      )
+
+      assert_receive(
+        {:modbuzz, Modbuzz.TCP.Client, _unit_id = 0, ^req, {:error, :tcp_send_error}}
+      )
+    end
   end
 
   describe "tcp messages" do

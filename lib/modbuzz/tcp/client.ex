@@ -17,9 +17,10 @@ defmodule Modbuzz.TCP.Client do
             unit_id: 0x00..0xFF,
             request: Modbuzz.PDU.Protocol.t(),
             from_or_pid: GenServer.from() | pid() | nil,
-            ref: reference()
+            ref: reference(),
+            timer: reference()
           }
-    defstruct [:call_or_cast, :unit_id, :request, :from_or_pid, :ref]
+    defstruct [:call_or_cast, :unit_id, :request, :from_or_pid, :ref, :timer]
   end
 
   @doc """
@@ -151,15 +152,16 @@ defmodule Modbuzz.TCP.Client do
 
     transaction_id = ADU.increment_transaction_id(transaction_id)
 
+    ref = make_ref()
+
     transaction = %Transaction{
       call_or_cast: call_or_cast,
       unit_id: unit_id,
       request: request,
       from_or_pid: from_or_pid,
-      ref: make_ref()
+      ref: ref,
+      timer: Process.send_after(self(), {:timeout?, transaction_id, ref}, timeout)
     }
-
-    timer = Process.send_after(self(), {:timeout?, transaction_id, transaction}, timeout)
 
     case connect(state, timeout) do
       {:ok, socket} ->
@@ -179,24 +181,33 @@ defmodule Modbuzz.TCP.Client do
 
           {:error, reason} ->
             Log.error("#{inspect(transport)} send error", reason, state)
-            Process.cancel_timer(timer)
             :ok = transport.close(socket)
+
+            transactions = Map.put(transactions, transaction_id, transaction)
             res_tuple = {:error, :tcp_send_error}
-            maybe_report_response(transaction, client_name, res_tuple)
-            {:noreply, %{state | socket: nil, binary: <<>>}}
+
+            Enum.each(transactions, fn {_transaction_id, transaction} ->
+              Process.cancel_timer(transaction.timer)
+              report_response(transaction, client_name, res_tuple)
+            end)
+
+            {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
         end
 
       {:error, reason} ->
         Log.error("#{inspect(transport)} connect error", reason, state)
-        Process.cancel_timer(timer)
+
         res_tuple = {:error, :tcp_connect_error}
-        maybe_report_response(transaction, client_name, res_tuple)
-        {:noreply, %{state | socket: nil, binary: <<>>}}
+
+        Process.cancel_timer(transaction.timer)
+        report_response(transaction, client_name, res_tuple)
+
+        {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
     end
   end
 
   @impl true
-  def handle_info({:timeout?, transaction_id, %Transaction{ref: ref}}, state) do
+  def handle_info({:timeout?, transaction_id, ref}, state) do
     %{
       client_name: client_name,
       transactions: transactions
@@ -210,8 +221,11 @@ defmodule Modbuzz.TCP.Client do
       # timeout for the current request, report timeout error
       %Transaction{request: request, ref: ref_} = transaction when ref_ == ref ->
         Log.error("TCP server didn't respond for #{inspect(request)}", nil, state)
+
         res_tuple = {:error, :timeout}
-        maybe_report_response(transaction, client_name, res_tuple)
+
+        report_response(transaction, client_name, res_tuple)
+
         {:noreply, %{state | transactions: Map.delete(transactions, transaction_id)}}
 
       # the current request is different, do not report timeout error
@@ -240,7 +254,12 @@ defmodule Modbuzz.TCP.Client do
             fn {ok_or_error, %ADU{transaction_id: transaction_id, pdu: pdu}}, acc ->
               {transaction, acc} = Map.pop(acc, transaction_id)
               res_tuple = {ok_or_error, pdu}
-              maybe_report_response(transaction, client_name, res_tuple)
+
+              if not is_nil(transaction) do
+                Process.cancel_timer(transaction.timer)
+                report_response(transaction, client_name, res_tuple)
+              end
+
               acc
             end
           )
@@ -248,9 +267,16 @@ defmodule Modbuzz.TCP.Client do
         {:noreply, %{state | transactions: transactions, binary: binary}}
 
       {:error, reason} ->
-        Log.error("decode error", reason, state)
-        transport.close(socket)
-        {:noreply, %{state | socket: nil, binary: <<>>}}
+        Log.error("Decode error", reason, state)
+        :ok = transport.close(socket)
+        res_tuple = {:error, :decode_error}
+
+        Enum.each(transactions, fn {_transaction_id, transaction} ->
+          Process.cancel_timer(transaction.timer)
+          report_response(transaction, client_name, res_tuple)
+        end)
+
+        {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
     end
   end
 
@@ -268,9 +294,11 @@ defmodule Modbuzz.TCP.Client do
 
     Log.error("#{inspect(transport)} closed", nil, state)
     if not is_nil(socket), do: :ok = transport.close(socket)
+    res_tuple = {:error, :tcp_closed}
 
     Enum.each(transactions, fn {_transaction_id, transaction} ->
-      maybe_report_response(transaction, client_name, {:error, :tcp_closed})
+      Process.cancel_timer(transaction.timer)
+      report_response(transaction, client_name, res_tuple)
     end)
 
     {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
@@ -290,9 +318,11 @@ defmodule Modbuzz.TCP.Client do
 
     Log.error("transport error", reason, state)
     if not is_nil(socket), do: :ok = transport.close(socket)
+    res_tuple = {:error, :tcp_error}
 
     Enum.each(transactions, fn {_transaction_id, transaction} ->
-      maybe_report_response(transaction, client_name, {:error, :tcp_error})
+      Process.cancel_timer(transaction.timer)
+      report_response(transaction, client_name, res_tuple)
     end)
 
     {:noreply, %{state | socket: nil, binary: <<>>, transactions: %{}}}
@@ -325,11 +355,8 @@ defmodule Modbuzz.TCP.Client do
     end
   end
 
-  defp maybe_report_response(transaction, client_name, res_tuple) do
+  defp report_response(%Transaction{} = transaction, client_name, res_tuple) do
     case transaction do
-      nil ->
-        :noop
-
       %{call_or_cast: :call, unit_id: _unit_id, request: _request, from_or_pid: from}
       when is_tuple(from) ->
         GenServer.reply(from, res_tuple)

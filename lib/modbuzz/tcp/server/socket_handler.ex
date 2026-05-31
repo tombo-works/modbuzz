@@ -50,7 +50,8 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
                 acc <> to_adu_binary(response_pdu_or_nil, adu.transaction_id, adu.unit_id)
               end)
 
-            transport.send(socket, response_binary)
+            if response_binary != <<>>, do: transport.send(socket, response_binary)
+
             {:noreply, %{state | binary: rest_binary}, {:continue, :recv}}
 
           {:error, reason} ->

@@ -50,6 +50,7 @@ defmodule Modbuzz.TCP.ADU do
           | {:error, {:adu_invalid_protocol, non_neg_integer()}}
           | {:error, {:adu_invalid_length, non_neg_integer()}}
           | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+          | {:error, :pdu_decode_error}
   def decode_request(
         <<_transaction_id::16, protocol_id::16, length::16, _rest::binary>> = binary,
         acc
@@ -66,7 +67,7 @@ defmodule Modbuzz.TCP.ADU do
       <<adu_binary::binary-size(adu_frame_size), rest::binary>> = binary
 
       case decode_request(adu_binary) do
-        {:error, {:pdu_unknown_function_code, _}} = error ->
+        {:error, _reason} = error ->
           error
 
         adu_tuple ->
@@ -100,6 +101,7 @@ defmodule Modbuzz.TCP.ADU do
           | {:error, {:adu_invalid_protocol, non_neg_integer()}}
           | {:error, {:adu_invalid_length, non_neg_integer()}}
           | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+          | {:error, :pdu_decode_error}
   def decode_response(
         <<_transaction_id::16, protocol_id::16, length::16, _rest::binary>> = binary,
         acc
@@ -116,7 +118,10 @@ defmodule Modbuzz.TCP.ADU do
       <<adu_binary::binary-size(adu_frame_size), rest::binary>> = binary
 
       case decode_response(adu_binary) do
-        {:error, {:pdu_unknown_function_code, _}} = error ->
+        {:error, %__MODULE__{}} = adu_tuple ->
+          decode_response(rest, [adu_tuple | acc])
+
+        {:error, _reason} = error ->
           error
 
         adu_tuple ->
@@ -148,6 +153,7 @@ defmodule Modbuzz.TCP.ADU do
   @spec decode_request(binary :: binary()) ::
           {:ok, t()}
           | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+          | {:error, :pdu_decode_error}
   defp decode_request(
          <<transaction_id::16, protocol_id::16, length::16, unit_id,
            pdu_binary::binary-size(length - 1)>>
@@ -160,9 +166,13 @@ defmodule Modbuzz.TCP.ADU do
       unit_id: unit_id
     }
 
-    case PDU.decode_request(pdu_binary) do
-      {:ok, pdu} when is_struct(pdu) -> {:ok, %{adu | pdu: pdu}}
-      {:error, {:pdu_unknown_function_code, _}} = error -> error
+    try do
+      case PDU.decode_request(pdu_binary) do
+        {:ok, pdu} when is_struct(pdu) -> {:ok, %{adu | pdu: pdu}}
+        {:error, {:pdu_unknown_function_code, _}} = error -> error
+      end
+    rescue
+      FunctionClauseError -> {:error, :pdu_decode_error}
     end
   end
 
@@ -170,6 +180,7 @@ defmodule Modbuzz.TCP.ADU do
           {:ok, t()}
           | {:error, t()}
           | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+          | {:error, :pdu_decode_error}
   defp decode_response(
          <<transaction_id::16, protocol_id::16, length::16, unit_id,
            pdu_binary::binary-size(length - 1)>>
@@ -182,10 +193,14 @@ defmodule Modbuzz.TCP.ADU do
       unit_id: unit_id
     }
 
-    case PDU.decode_response(pdu_binary) do
-      {:ok, pdu} when is_struct(pdu) -> {:ok, %{adu | pdu: pdu}}
-      {:error, pdu} when is_struct(pdu) -> {:error, %{adu | pdu: pdu}}
-      {:error, {:pdu_unknown_function_code, _}} = error -> error
+    try do
+      case PDU.decode_response(pdu_binary) do
+        {:ok, pdu} when is_struct(pdu) -> {:ok, %{adu | pdu: pdu}}
+        {:error, pdu} when is_struct(pdu) -> {:error, %{adu | pdu: pdu}}
+        {:error, {:pdu_unknown_function_code, _}} = error -> error
+      end
+    rescue
+      FunctionClauseError -> {:error, :pdu_decode_error}
     end
   end
 end

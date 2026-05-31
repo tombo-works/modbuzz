@@ -36,6 +36,7 @@ defmodule Modbuzz.RTU.ADU do
           {:ok, t()}
           | {:error, :adu_binary_is_short}
           | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+          | {:error, :pdu_decode_error}
           | {:error, :adu_binary_is_long}
           | {:error, :adu_crc_error}
   def decode_request(binary) when is_binary(binary) and byte_size(binary) < @min_frame_length do
@@ -46,9 +47,15 @@ defmodule Modbuzz.RTU.ADU do
     with {:ok, pdu_length} <- Modbuzz.PDU.request_length(binary),
          true <- byte_size(binary) >= pdu_length + @crc_length || {:error, :adu_binary_is_short},
          <<pdu_binary::binary-size(pdu_length), crc::binary-size(@crc_length)>> <- binary,
-         true <- crc(<<unit_id, pdu_binary::binary>>) == crc || {:error, :adu_crc_error},
-         {:ok, pdu} <- PDU.decode_request(pdu_binary) do
-      {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
+         true <- crc(<<unit_id, pdu_binary::binary>>) == crc || {:error, :adu_crc_error} do
+      try do
+        case PDU.decode_request(pdu_binary) do
+          {:ok, pdu} -> {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
+          {:error, {:pdu_unknown_function_code, _}} = error -> error
+        end
+      rescue
+        FunctionClauseError -> {:error, :pdu_decode_error}
+      end
     else
       {:error, {:pdu_unknown_function_code, _}} = error -> error
       {:error, :adu_binary_is_short} = error -> error
@@ -61,6 +68,7 @@ defmodule Modbuzz.RTU.ADU do
           {:ok, t()}
           | {:error, :adu_binary_is_short}
           | {:error, {:pdu_unknown_function_code, non_neg_integer()}}
+          | {:error, :pdu_decode_error}
           | {:error, :adu_binary_is_long}
           | {:error, :adu_crc_error}
           | {:error, t()}
@@ -72,15 +80,21 @@ defmodule Modbuzz.RTU.ADU do
     with {:ok, pdu_length} <- Modbuzz.PDU.response_length(binary),
          true <- byte_size(binary) >= pdu_length + @crc_length || {:error, :adu_binary_is_short},
          <<pdu_binary::binary-size(pdu_length), crc::binary-size(@crc_length)>> <- binary,
-         true <- crc(<<unit_id, pdu_binary::binary>>) == crc || {:error, :adu_crc_error},
-         {:ok, pdu} <- PDU.decode_response(pdu_binary) do
-      {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
+         true <- crc(<<unit_id, pdu_binary::binary>>) == crc || {:error, :adu_crc_error} do
+      try do
+        case PDU.decode_response(pdu_binary) do
+          {:ok, pdu} -> {:ok, %__MODULE__{unit_id: unit_id, pdu: pdu}}
+          {:error, pdu} when is_struct(pdu) -> {:error, %__MODULE__{unit_id: unit_id, pdu: pdu}}
+          {:error, {:pdu_unknown_function_code, _}} = error -> error
+        end
+      rescue
+        FunctionClauseError -> {:error, :pdu_decode_error}
+      end
     else
       {:error, {:pdu_unknown_function_code, _}} = error -> error
       {:error, :adu_binary_is_short} = error -> error
       long_binary when is_binary(long_binary) -> {:error, :adu_binary_is_long}
       {:error, :adu_crc_error} = error -> error
-      {:error, pdu} when is_struct(pdu) -> {:error, %__MODULE__{unit_id: unit_id, pdu: pdu}}
     end
   end
 

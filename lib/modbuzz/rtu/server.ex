@@ -60,6 +60,10 @@ defmodule Modbuzz.RTU.Server do
         Log.error("Decode error", reason, state)
         {:noreply, %{state | binary: <<>>}}
 
+      {:error, :pdu_decode_error = reason} ->
+        Log.error("Decode error", reason, state)
+        {:noreply, %{state | binary: <<>>}}
+
       {:error, :adu_binary_is_long = reason} ->
         Log.error("Decode error", reason, state)
         {:noreply, %{state | binary: <<>>}}

@@ -1,6 +1,8 @@
 defmodule ModbuzzTest do
   use ExUnit.Case
 
+  import ExUnit.CaptureLog
+
   @test_address {127, 0, 0, 1}
   @test_port_1 502 * 100
   @test_port_2 503 * 100
@@ -98,6 +100,38 @@ defmodule ModbuzzTest do
                Modbuzz.request(:data_server_1, 0, request)
     end
 
+    test "return error tuple when stored response is an exception pdu" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      err_response = Modbuzz.PDU.to_error(request, :server_device_failure)
+
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.upsert(:data_server_1, request, err_response)
+
+      assert {:error, ^err_response} = Modbuzz.request(:data_server_1, 0, request)
+    end
+
+    test "return error tuple when callback returns an exception pdu" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      err_response = Modbuzz.PDU.to_error(request, :server_device_failure)
+
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.upsert(:data_server_1, request, fn _request -> err_response end)
+
+      assert {:error, ^err_response} = Modbuzz.request(:data_server_1, 0, request)
+    end
+
+    test "callback invalid response times out" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.upsert(:data_server_1, request, fn _request -> nil end)
+
+      # The callback worker is expected to crash on invalid return values; request/4 should still return timeout.
+      capture_log(fn ->
+        assert {:error, :timeout} = Modbuzz.request(:data_server_1, 0, request, 10)
+      end)
+    end
+
     test "multiple instance" do
       :ok = Modbuzz.start_data_server(:data_server_2)
       :ok = Modbuzz.start_tcp_server(:server_2, @test_address, @test_port_2, :data_server_2)
@@ -176,6 +210,27 @@ defmodule ModbuzzTest do
 
       assert :ok = Modbuzz.request_async(:data_server_1, 0, request)
       assert_receive {:modbuzz, :data_server_1, 0, ^request, {:error, ^err_response}}
+    end
+
+    test "invalid callback response times out and data server stays alive" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      valid_response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
+
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.upsert(:data_server_1, request, fn _request -> nil end)
+
+      # The timeout is the assertion; the worker crash log is expected and would only make test output noisy.
+      capture_log(fn ->
+        assert :ok = Modbuzz.request_async(:data_server_1, 0, request, self(), 10)
+        assert_receive {:modbuzz, :data_server_1, 0, ^request, {:error, :timeout}}
+      end)
+
+      assert Process.alive?(GenServer.whereis(:data_server_1))
+
+      :ok = Modbuzz.upsert(:data_server_1, request, valid_response)
+
+      assert :ok = Modbuzz.request_async(:data_server_1, 0, request)
+      assert_receive {:modbuzz, :data_server_1, 0, ^request, {:ok, ^valid_response}}
     end
 
     test "receives async response from rtu client" do

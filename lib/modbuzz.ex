@@ -31,7 +31,10 @@ defmodule Modbuzz do
   @doc """
   Request data asynchronously.
 
-  This function returns immediately and sends the result as a message to `pid`.
+  This function returns immediately and attempts to send the result as a message to `pid`.
+  It uses `GenServer.cast/2`, so it always returns `:ok` even if `name` is not running or
+  registered. In that case, no result message will be delivered.
+
   The message format is:
 
       {:modbuzz, name, unit_id, request, {:ok, response}}

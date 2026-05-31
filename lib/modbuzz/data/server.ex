@@ -40,28 +40,7 @@ defmodule Modbuzz.Data.Server do
   def init(args) do
     name = Keyword.fetch!(args, :name)
 
-    {:ok, %{name: name, async_reqs: %{}}}
-  end
-
-  def handle_call({:call, unit_id, request, _timeout}, from, state) do
-    %{name: name} = state
-    res_or_cb = get_res_or_cb(name, unit_id, request)
-
-    case res_or_cb do
-      response when is_struct(response) ->
-        {:reply, {:ok, response}, state}
-
-      callback when is_function(callback) ->
-        Task.Supervisor.start_child(
-          {:via, PartitionSupervisor, {Modbuzz.Data.CallbackSupervisor.name(name), self()}},
-          fn -> GenServer.reply(from, {:ok, callback.(request)}) end
-        )
-
-        {:noreply, state}
-
-      nil ->
-        {:noreply, state}
-    end
+    {:ok, %{name: name, reqs: %{}}}
   end
 
   def handle_call({:create_unit, unit_id}, _from, state) do
@@ -122,57 +101,89 @@ defmodule Modbuzz.Data.Server do
     end
   end
 
+  def handle_call({:call, unit_id, request, timeout}, from, state)
+      when is_unit_id(unit_id) and is_integer(timeout) and timeout >= 0 do
+    handle_req({:call, unit_id, request, from, timeout}, state)
+  end
+
   def handle_cast({:cast, unit_id, request, pid, timeout}, state)
-      when is_pid(pid) and is_integer(timeout) and timeout >= 0 do
-    %{name: name, async_reqs: async_reqs} = state
+      when is_unit_id(unit_id) and is_pid(pid) and is_integer(timeout) and timeout >= 0 do
+    handle_req({:cast, unit_id, request, pid, timeout}, state)
+  end
+
+  defp handle_req({call_or_cast, unit_id, request, from_or_pid, timeout}, state) do
+    %{
+      name: name,
+      reqs: reqs
+    } = state
+
     res_or_cb = get_res_or_cb(name, unit_id, request)
+    req = {call_or_cast, unit_id, request, from_or_pid}
 
     case res_or_cb do
       response when is_struct(response) ->
-        send(pid, {:modbuzz, name, unit_id, request, async_result_tuple(response)})
+        report_response(req, name, result_tuple(response))
         {:noreply, state}
 
       callback when is_function(callback) ->
         ref = make_ref()
-        timer = Process.send_after(self(), {:async_timeout, ref}, timeout)
-        async_reqs = Map.put(async_reqs, ref, {timer, pid, unit_id, request})
+        timer = Process.send_after(self(), {:timeout?, ref}, timeout)
+        reqs = Map.put(reqs, ref, {req, timer})
         me = self()
 
         Task.Supervisor.start_child(
           {:via, PartitionSupervisor, {Modbuzz.Data.CallbackSupervisor.name(name), self()}},
-          fn -> send(me, {:async_response, ref, callback.(request)}) end
+          fn -> send(me, {:callback_result, ref, result_tuple(callback.(request))}) end
         )
 
-        {:noreply, %{state | async_reqs: async_reqs}}
+        {:noreply, %{state | reqs: reqs}}
 
       nil ->
         ref = make_ref()
-        timer = Process.send_after(self(), {:async_timeout, ref}, timeout)
-        async_reqs = Map.put(async_reqs, ref, {timer, pid, unit_id, request})
-        {:noreply, %{state | async_reqs: async_reqs}}
+        timer = Process.send_after(self(), {:timeout?, ref}, timeout)
+        reqs = Map.put(reqs, ref, {req, timer})
+        {:noreply, %{state | reqs: reqs}}
     end
   end
 
-  def handle_info({:async_response, ref, response}, %{name: name, async_reqs: async_reqs} = state) do
-    case Map.pop(async_reqs, ref) do
-      {{timer, pid, unit_id, request}, async_reqs} ->
+  def handle_info({:callback_result, ref, result}, state) do
+    %{
+      name: name,
+      reqs: reqs
+    } = state
+
+    case Map.pop(reqs, ref) do
+      {{req, timer}, reqs} ->
         Process.cancel_timer(timer)
-        send(pid, {:modbuzz, name, unit_id, request, async_result_tuple(response)})
-        {:noreply, %{state | async_reqs: async_reqs}}
+        report_response(req, name, result)
+        {:noreply, %{state | reqs: reqs}}
 
-      {nil, _async_reqs} ->
+      {nil, _reqs} ->
         {:noreply, state}
     end
   end
 
-  def handle_info({:async_timeout, ref}, %{name: name, async_reqs: async_reqs} = state) do
-    case Map.pop(async_reqs, ref) do
-      {{_timer, pid, unit_id, request}, async_reqs} ->
-        send(pid, {:modbuzz, name, unit_id, request, {:error, :timeout}})
-        {:noreply, %{state | async_reqs: async_reqs}}
+  def handle_info({:timeout?, ref}, %{name: name, reqs: reqs} = state) do
+    case Map.pop(reqs, ref) do
+      {{req, _timer}, reqs} ->
+        report_response(req, name, {:error, :timeout})
+        {:noreply, %{state | reqs: reqs}}
 
-      {nil, _async_reqs} ->
+      {nil, _reqs} ->
         {:noreply, state}
+    end
+  end
+
+  defp report_response(req, name, res_tuple) do
+    case req do
+      {:call, _unit_id, _request, from} when is_tuple(from) ->
+        GenServer.reply(from, res_tuple)
+
+      {:cast, unit_id, request, pid} when is_pid(pid) ->
+        send(pid, {:modbuzz, name, unit_id, request, res_tuple})
+
+      _ ->
+        raise ArgumentError, "unexpected req format: #{inspect(req)}"
     end
   end
 
@@ -186,11 +197,10 @@ defmodule Modbuzz.Data.Server do
     end
   end
 
-  defp async_result_tuple(%module{} = response) do
-    if List.last(Module.split(module)) == "Err" do
-      {:error, response}
-    else
-      {:ok, response}
+  defp result_tuple(response) when is_struct(response) do
+    case response do
+      %{exception_code: _} -> {:error, response}
+      _ -> {:ok, response}
     end
   end
 end

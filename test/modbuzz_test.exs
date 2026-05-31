@@ -126,6 +126,88 @@ defmodule ModbuzzTest do
     end
   end
 
+  describe "request_async/3" do
+    setup do
+      :ok = Modbuzz.start_data_server(:data_server_1)
+      :ok = Modbuzz.start_tcp_server(:server_1, @test_address, @test_port_1, :data_server_1)
+      :ok = Modbuzz.start_tcp_client(:client_1, @test_address, @test_port_1)
+    end
+
+    test "returns immediately and receives async response from tcp client and data server" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
+
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.upsert(:data_server_1, request, response)
+
+      assert :ok = Modbuzz.request_async(:client_1, 0, request)
+      assert_receive {:modbuzz, :client_1, 0, ^request, {:ok, ^response}}
+
+      assert :ok = Modbuzz.request_async(:data_server_1, 0, request)
+      assert_receive {:modbuzz, :data_server_1, 0, ^request, {:ok, ^response}}
+    end
+
+    test "receives timeout error from data server when request is not mapped" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+
+      :ok = Modbuzz.create_unit(:data_server_1)
+
+      assert :ok = Modbuzz.request_async(:data_server_1, 0, request, self(), 10)
+      assert_receive {:modbuzz, :data_server_1, 0, ^request, {:error, :timeout}}
+    end
+
+    test "receives error tuple from data server when stored response is an exception pdu" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      err_response = Modbuzz.PDU.to_error(request, :server_device_failure)
+
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.upsert(:data_server_1, request, err_response)
+
+      assert :ok = Modbuzz.request_async(:data_server_1, 0, request)
+      assert_receive {:modbuzz, :data_server_1, 0, ^request, {:error, ^err_response}}
+    end
+
+    test "receives error tuple from data server when callback returns an exception pdu" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      err_response = Modbuzz.PDU.to_error(request, :server_device_failure)
+
+      :ok = Modbuzz.create_unit(:data_server_1)
+      :ok = Modbuzz.upsert(:data_server_1, request, fn _request -> err_response end)
+
+      assert :ok = Modbuzz.request_async(:data_server_1, 0, request)
+      assert_receive {:modbuzz, :data_server_1, 0, ^request, {:error, ^err_response}}
+    end
+
+    test "receives async response from rtu client" do
+      request = %Modbuzz.PDU.ReadDiscreteInputs.Req{starting_address: 0, quantity_of_inputs: 0}
+      response = %Modbuzz.PDU.ReadDiscreteInputs.Res{byte_count: 0, input_status: []}
+      unit_id = 1
+
+      response_binary =
+        response
+        |> Modbuzz.RTU.ADU.new(unit_id)
+        |> Modbuzz.RTU.ADU.encode()
+
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, fn [] -> {:ok, self()} end)
+      |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
+      |> expect(:write, fn _pid, _binary, _timeout ->
+        send(:rtu_client, {:circuits_uart, "ttyTEST", response_binary})
+        :ok
+      end)
+
+      _pid =
+        start_supervised!(
+          {Modbuzz.RTU.Client,
+           [name: :rtu_client, transport: Modbuzz.RTU.TransportMock, device_name: "ttyTEST"]},
+          restart: :temporary
+        )
+
+      assert :ok = Modbuzz.request_async(:rtu_client, unit_id, request, self(), 100)
+      assert_receive {:modbuzz, :rtu_client, ^unit_id, ^request, {:ok, ^response}}
+    end
+  end
+
   describe "create_unit/2, upsert/4, delete/3, dump/2" do
     setup do
       :ok = Modbuzz.start_data_server(:data_server)

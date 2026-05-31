@@ -12,14 +12,41 @@ defmodule Modbuzz do
   @type server :: GenServer.name()
   @type unit_id :: 0..247
 
-  @doc "Request data."
-  @spec request(name :: client() | data_server(), unit_id(), request(), non_neg_integer()) ::
-          {:ok, response()} | {:error, error()} | {:error, reason :: term()}
+  @doc """
+  Request data synchronously.
+  """
+  @spec request(
+          name :: client() | data_server(),
+          unit_id(),
+          request(),
+          non_neg_integer()
+        ) :: {:ok, response()} | {:error, error()} | {:error, reason :: term()}
   def request(name, unit_id \\ 0, request, timeout \\ 5000) do
     # The GenServer.call timeout is set slightly longer than the internal `timeout` so that
     # the request logic inside the client/data_server handles the timeout first and returns
     # {:error, :timeout} gracefully, rather than GenServer.call raising an EXIT signal.
     GenServer.call(name, {:call, unit_id, request, timeout}, timeout + 50)
+  end
+
+  @doc """
+  Request data asynchronously.
+
+  This function returns immediately and sends the result as a message to `pid`.
+  The message format is:
+
+      {:modbuzz, name, unit_id, request, {:ok, response}}
+      {:modbuzz, name, unit_id, request, {:error, error_response_or_error_reason}}
+  """
+  @spec request_async(
+          name :: client() | data_server(),
+          unit_id(),
+          request(),
+          pid(),
+          non_neg_integer()
+        ) :: :ok
+  def request_async(name, unit_id \\ 0, request, pid \\ self(), timeout \\ 5000)
+      when is_pid(pid) and is_integer(timeout) and timeout >= 0 do
+    GenServer.cast(name, {:cast, unit_id, request, pid, timeout})
   end
 
   @doc "Create a unit under the data server."

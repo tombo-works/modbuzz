@@ -149,20 +149,18 @@ defmodule Modbuzz do
           data_source :: data_server() | client()
         ) :: :ok | {:error, :already_started}
   def start_tcp_server(name, address, port, data_source) do
-    case DynamicSupervisor.start_child(
-           Modbuzz.Application.server_supervisor_name(),
-           {Modbuzz.TCP.ServerSupervisor,
-            [name: name, address: address, port: port, data_source: data_source]}
-         ) do
-      {:ok, _pid} ->
-        :ok
+    supervisor = Modbuzz.Application.server_supervisor_name()
 
-      {:error, {:shutdown, {:failed_to_start_child, _, {:already_started, _pid}}}} ->
-        {:error, :already_started}
+    child_spec =
+      {Modbuzz.TCP.ServerSupervisor,
+       [
+         name: name,
+         address: address,
+         port: port,
+         data_source: data_source
+       ]}
 
-      {:error, {:already_started, _pid}} ->
-        {:error, :already_started}
-    end
+    start_child(supervisor, child_spec)
   end
 
   @doc """
@@ -184,14 +182,17 @@ defmodule Modbuzz do
           transport_opts :: keyword()
         ) :: :ok | {:error, :already_started}
   def start_rtu_client(name, device_name, transport_opts) do
-    case DynamicSupervisor.start_child(
-           Modbuzz.Application.client_supervisor_name(),
-           {Modbuzz.RTU.Client,
-            [name: name, device_name: device_name, transport_opts: transport_opts]}
-         ) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> {:error, :already_started}
-    end
+    supervisor = Modbuzz.Application.client_supervisor_name()
+
+    child_spec =
+      {Modbuzz.RTU.Client,
+       [
+         name: name,
+         device_name: device_name,
+         transport_opts: transport_opts
+       ]}
+
+    start_child(supervisor, child_spec)
   end
 
   @doc """
@@ -217,16 +218,22 @@ defmodule Modbuzz do
           data_source :: data_server() | client()
         ) :: :ok | {:error, :already_started}
   def start_rtu_server(name, device_name, transport_opts, data_source) do
-    case DynamicSupervisor.start_child(
-           Modbuzz.Application.server_supervisor_name(),
-           {Modbuzz.RTU.Server,
-            [
-              name: name,
-              device_name: device_name,
-              transport_opts: transport_opts,
-              data_source: data_source
-            ]}
-         ) do
+    supervisor = Modbuzz.Application.server_supervisor_name()
+
+    child_spec =
+      {Modbuzz.RTU.Server,
+       [
+         name: name,
+         device_name: device_name,
+         transport_opts: transport_opts,
+         data_source: data_source
+       ]}
+
+    start_child(supervisor, child_spec)
+  end
+
+  defp start_child(supervisor, child_spec) do
+    case DynamicSupervisor.start_child(supervisor, child_spec) do
       {:ok, _pid} ->
         :ok
 

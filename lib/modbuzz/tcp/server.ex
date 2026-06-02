@@ -14,16 +14,18 @@ defmodule Modbuzz.TCP.Server do
 
   @doc false
   def init(args) do
-    transport = Keyword.get(args, :transport, :gen_tcp)
     name = Keyword.fetch!(args, :name)
+    args = Keyword.fetch!(args, :args)
+
+    transport = Keyword.get(args, :transport, :gen_tcp)
     address = Keyword.fetch!(args, :address)
     port = Keyword.fetch!(args, :port)
     data_source = Keyword.fetch!(args, :data_source)
 
     {:ok,
      %{
-       transport: transport,
        name: name,
+       transport: transport,
        address: address,
        port: port,
        listen_socket: nil,
@@ -45,6 +47,7 @@ defmodule Modbuzz.TCP.Server do
 
   def handle_continue(:accept, state) do
     %{
+      name: name,
       transport: transport,
       listen_socket: listen_socket,
       address: address,
@@ -55,11 +58,12 @@ defmodule Modbuzz.TCP.Server do
     case transport.accept(listen_socket) do
       {:ok, socket} ->
         Modbuzz.TCP.Server.SocketHandlerSupervisor.start_socket_handler(
+          name,
           transport,
-          socket,
           address,
           port,
-          data_source
+          data_source,
+          socket
         )
 
       {:error, reason} ->

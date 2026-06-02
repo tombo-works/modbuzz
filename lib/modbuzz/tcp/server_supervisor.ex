@@ -3,6 +3,10 @@ defmodule Modbuzz.TCP.ServerSupervisor do
 
   use Supervisor
 
+  def name(name) do
+    {:via, Registry, {Modbuzz.Registry, {name, __MODULE__}}}
+  end
+
   @doc """
   Starts a `Modbuzz.TCP.Server`'s Supervisor process linked to the current process.
 
@@ -18,21 +22,24 @@ defmodule Modbuzz.TCP.ServerSupervisor do
 
   """
   def start_link(args) do
-    Supervisor.start_link(__MODULE__, args)
+    name = Keyword.fetch!(args, :name)
+    Supervisor.start_link(__MODULE__, args, name: name)
   end
 
   @doc false
   def init(args) do
-    address = Keyword.fetch!(args, :address)
-    port = Keyword.fetch!(args, :port)
+    name = Keyword.fetch!(args, :name)
+    {:via, Registry, {Modbuzz.Registry, {name, __MODULE__}}} = name
 
     children = [
       {
         DynamicSupervisor,
-        name: Modbuzz.TCP.Server.SocketHandlerSupervisor.name(address, port),
-        strategy: :one_for_one
+        name: Modbuzz.TCP.Server.SocketHandlerSupervisor.name(name), strategy: :one_for_one
       },
-      {Modbuzz.TCP.Server, args}
+      {
+        Modbuzz.TCP.Server,
+        name: name, args: args
+      }
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

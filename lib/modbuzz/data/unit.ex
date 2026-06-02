@@ -35,14 +35,14 @@ defmodule Modbuzz.Data.Unit do
     Agent.get({atom, node}, fn state -> state end)
   end
 
-  def name(server_name, unit_id) do
-    {:via, Registry, {Modbuzz.Registry, {server_name, __MODULE__, unit_id}}}
+  def name(name, unit_id) do
+    {:via, Registry, {Modbuzz.Registry, {name, __MODULE__, unit_id}}}
   end
 
   def start_link(args) do
-    server_name = Keyword.fetch!(args, :server_name)
+    name = Keyword.fetch!(args, :name)
     unit_id = Keyword.fetch!(args, :unit_id)
 
-    Agent.start_link(fn -> _initial_state = %{} end, name: name(server_name, unit_id))
+    Agent.start_link(fn -> _initial_state = %{} end, name: name(name, unit_id))
   end
 end

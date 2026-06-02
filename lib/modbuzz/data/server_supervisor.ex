@@ -3,25 +3,35 @@ defmodule Modbuzz.Data.ServerSupervisor do
 
   use Supervisor
 
+  def name(name) do
+    {:via, Registry, {Modbuzz.Registry, {name, __MODULE__}}}
+  end
+
   @doc false
   def start_link(args) do
-    Supervisor.start_link(__MODULE__, args)
+    name = Keyword.fetch!(args, :name)
+    Supervisor.start_link(__MODULE__, args, name: name)
   end
 
   @doc false
   def init(args) do
-    server_name = Keyword.fetch!(args, :name)
+    {name, args} = Keyword.pop!(args, :name)
+
+    {:via, Registry, {Modbuzz.Registry, {name, __MODULE__}}} = name
 
     children = [
       {
         PartitionSupervisor,
-        child_spec: Task.Supervisor, name: Modbuzz.Data.CallbackSupervisor.name(server_name)
+        name: Modbuzz.Data.CallbackSupervisor.name(name), child_spec: Task.Supervisor
       },
       {
         DynamicSupervisor,
-        name: Modbuzz.Data.UnitSupervisor.name(server_name), strategy: :one_for_one
+        name: Modbuzz.Data.UnitSupervisor.name(name), strategy: :one_for_one
       },
-      {Modbuzz.Data.Server, args}
+      {
+        Modbuzz.Data.Server,
+        name: name, args: args
+      }
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

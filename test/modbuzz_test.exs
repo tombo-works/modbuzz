@@ -35,9 +35,21 @@ defmodule ModbuzzTest do
     end
   end
 
+  describe "stop_data_server/1" do
+    test "return ok, return error tuple" do
+      name = :data_server
+
+      :ok = Modbuzz.start_data_server(name)
+
+      assert :ok = Modbuzz.stop_data_server(name)
+      assert is_nil(GenServer.whereis(name))
+      assert {:error, :not_started} = Modbuzz.stop_data_server(name)
+    end
+  end
+
   describe "start_tcp_client/3" do
     test "return ok, return error tuple" do
-      name = :client
+      name = :tcp_client
 
       assert :ok = Modbuzz.start_tcp_client(name, @test_address, @test_port_1)
 
@@ -51,9 +63,21 @@ defmodule ModbuzzTest do
     end
   end
 
+  describe "stop_tcp_client/1" do
+    test "return ok, return error tuple" do
+      name = :tcp_client
+
+      :ok = Modbuzz.start_tcp_client(name, @test_address, @test_port_1)
+
+      assert :ok = Modbuzz.stop_tcp_client(name)
+      assert is_nil(GenServer.whereis(name))
+      assert {:error, :not_started} = Modbuzz.stop_tcp_client(name)
+    end
+  end
+
   describe "start_tcp_server/4" do
     test "return ok, return error tuple" do
-      name = :server
+      name = :tcp_server
 
       assert :ok = Modbuzz.start_tcp_server(name, @test_address, @test_port_1, :no_source)
 
@@ -64,6 +88,129 @@ defmodule ModbuzzTest do
     test "multiple instance" do
       assert :ok = Modbuzz.start_tcp_server(:server_1, @test_address, @test_port_1, :no_source)
       assert :ok = Modbuzz.start_tcp_server(:server_2, @test_address, @test_port_2, :no_source)
+    end
+  end
+
+  describe "stop_tcp_server/1" do
+    test "return ok, return error tuple" do
+      name = :tcp_server
+
+      :ok = Modbuzz.start_tcp_server(name, @test_address, @test_port_1, :no_source)
+
+      assert :ok = Modbuzz.stop_tcp_server(name)
+      assert is_nil(GenServer.whereis(name))
+      assert {:error, :not_started} = Modbuzz.stop_tcp_server(name)
+    end
+  end
+
+  describe "start_rtu_client/4" do
+    test "return ok, return error tuple" do
+      name = :rtu_client
+
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, fn [] -> {:ok, self()} end)
+      |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
+
+      assert :ok = Modbuzz.start_rtu_client(name, "ttyTEST", [], Modbuzz.RTU.TransportMock)
+
+      assert {:error, :already_started} =
+               Modbuzz.start_rtu_client(name, "ttyTEST", [], Modbuzz.RTU.TransportMock)
+    end
+
+    test "multiple instance" do
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, 2, fn [] -> {:ok, self()} end)
+      |> expect(:open, 2, fn _transport_pid, _device_name, _opts -> :ok end)
+
+      assert :ok =
+               Modbuzz.start_rtu_client(:rtu_client_1, "ttyTEST_1", [], Modbuzz.RTU.TransportMock)
+
+      assert :ok =
+               Modbuzz.start_rtu_client(:rtu_client_2, "ttyTEST_2", [], Modbuzz.RTU.TransportMock)
+    end
+  end
+
+  describe "stop_rtu_client/1" do
+    test "return ok, return error tuple" do
+      name = :rtu_client
+
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, fn [] -> {:ok, self()} end)
+      |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
+
+      :ok = Modbuzz.start_rtu_client(name, "ttyTEST", [], Modbuzz.RTU.TransportMock)
+
+      assert :ok = Modbuzz.stop_rtu_client(name)
+      assert is_nil(GenServer.whereis(name))
+      assert {:error, :not_started} = Modbuzz.stop_rtu_client(name)
+    end
+  end
+
+  describe "start_rtu_server/5" do
+    test "return ok, return error tuple" do
+      name = :rtu_server
+
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, fn [] -> {:ok, self()} end)
+      |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
+
+      assert :ok =
+               Modbuzz.start_rtu_server(
+                 name,
+                 "ttyTEST",
+                 [],
+                 :no_source,
+                 Modbuzz.RTU.TransportMock
+               )
+
+      assert {:error, :already_started} =
+               Modbuzz.start_rtu_server(
+                 name,
+                 "ttyTEST",
+                 [],
+                 :no_source,
+                 Modbuzz.RTU.TransportMock
+               )
+    end
+
+    test "multiple instance" do
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, 2, fn [] -> {:ok, self()} end)
+      |> expect(:open, 2, fn _transport_pid, _device_name, _opts -> :ok end)
+
+      assert :ok =
+               Modbuzz.start_rtu_server(
+                 :rtu_server_1,
+                 "ttyTEST_1",
+                 [],
+                 :no_source,
+                 Modbuzz.RTU.TransportMock
+               )
+
+      assert :ok =
+               Modbuzz.start_rtu_server(
+                 :rtu_server_2,
+                 "ttyTEST_2",
+                 [],
+                 :no_source,
+                 Modbuzz.RTU.TransportMock
+               )
+    end
+  end
+
+  describe "stop_rtu_server/1" do
+    test "return ok, return error tuple" do
+      name = :rtu_server
+
+      Modbuzz.RTU.TransportMock
+      |> expect(:start_link, fn [] -> {:ok, self()} end)
+      |> expect(:open, fn _transport_pid, _device_name, _opts -> :ok end)
+
+      :ok = Modbuzz.start_rtu_server(name, "ttyTEST", [], :no_source, Modbuzz.RTU.TransportMock)
+
+      assert :ok = Modbuzz.stop_rtu_server(name)
+      assert is_nil(GenServer.whereis(name))
+      assert {:error, :not_started} = Modbuzz.stop_rtu_server(name)
     end
   end
 

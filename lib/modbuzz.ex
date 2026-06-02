@@ -89,19 +89,22 @@ defmodule Modbuzz do
   """
   @spec start_data_server(name :: data_server()) :: :ok
   def start_data_server(name) do
-    case DynamicSupervisor.start_child(
-           Modbuzz.Application.data_server_supervisor_name(),
-           {Modbuzz.Data.ServerSupervisor, [name: name]}
-         ) do
-      {:ok, _pid} ->
-        :ok
+    supervisor = Modbuzz.Application.data_server_dynamic_supervisor_name()
+    name = Modbuzz.Data.ServerSupervisor.name(name)
+    child_spec = {Modbuzz.Data.ServerSupervisor, name: name}
 
-      {:error, {:shutdown, {:failed_to_start_child, _, {:already_started, _pid}}}} ->
-        {:error, :already_started}
+    start_child(supervisor, child_spec)
+  end
 
-      {:error, {:already_started, _pid}} ->
-        {:error, :already_started}
-    end
+  @doc """
+  Stop Data server.
+  """
+  @spec stop_data_server(name :: server()) :: :ok | {:error, :not_started}
+  def stop_data_server(name) do
+    supervisor = Modbuzz.Application.data_server_dynamic_supervisor_name()
+    name = Modbuzz.Data.ServerSupervisor.name(name)
+
+    stop_child(supervisor, name)
   end
 
   @doc """
@@ -120,13 +123,27 @@ defmodule Modbuzz do
           port :: :inet.port_number()
         ) :: :ok | {:error, :already_started}
   def start_tcp_client(name, address, port) do
-    case DynamicSupervisor.start_child(
-           Modbuzz.Application.client_supervisor_name(),
-           {Modbuzz.TCP.Client, [name: name, address: address, port: port]}
-         ) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> {:error, :already_started}
-    end
+    supervisor = Modbuzz.Application.client_dynamic_supervisor_name()
+
+    child_spec =
+      {Modbuzz.TCP.Client,
+       [
+         name: name,
+         address: address,
+         port: port
+       ]}
+
+    start_child(supervisor, child_spec)
+  end
+
+  @doc """
+  Stop TCP client.
+  """
+  @spec stop_tcp_client(name :: client()) :: :ok | {:error, :not_started}
+  def stop_tcp_client(name) do
+    supervisor = Modbuzz.Application.client_dynamic_supervisor_name()
+
+    stop_child(supervisor, name)
   end
 
   @doc """
@@ -149,7 +166,8 @@ defmodule Modbuzz do
           data_source :: data_server() | client()
         ) :: :ok | {:error, :already_started}
   def start_tcp_server(name, address, port, data_source) do
-    supervisor = Modbuzz.Application.server_supervisor_name()
+    supervisor = Modbuzz.Application.server_dynamic_supervisor_name()
+    name = Modbuzz.TCP.ServerSupervisor.name(name)
 
     child_spec =
       {Modbuzz.TCP.ServerSupervisor,
@@ -161,6 +179,17 @@ defmodule Modbuzz do
        ]}
 
     start_child(supervisor, child_spec)
+  end
+
+  @doc """
+  Stop TCP server.
+  """
+  @spec stop_tcp_server(name :: server()) :: :ok | {:error, :not_started}
+  def stop_tcp_server(name) do
+    supervisor = Modbuzz.Application.server_dynamic_supervisor_name()
+    name = Modbuzz.TCP.ServerSupervisor.name(name)
+
+    stop_child(supervisor, name)
   end
 
   @doc """
@@ -179,20 +208,32 @@ defmodule Modbuzz do
   @spec start_rtu_client(
           name :: client(),
           device_name :: String.t(),
-          transport_opts :: keyword()
+          transport_opts :: keyword(),
+          transport :: module()
         ) :: :ok | {:error, :already_started}
-  def start_rtu_client(name, device_name, transport_opts) do
-    supervisor = Modbuzz.Application.client_supervisor_name()
+  def start_rtu_client(name, device_name, transport_opts, transport \\ Circuits.UART) do
+    supervisor = Modbuzz.Application.client_dynamic_supervisor_name()
 
     child_spec =
       {Modbuzz.RTU.Client,
        [
          name: name,
          device_name: device_name,
-         transport_opts: transport_opts
+         transport_opts: transport_opts,
+         transport: transport
        ]}
 
     start_child(supervisor, child_spec)
+  end
+
+  @doc """
+  Stop RTU client.
+  """
+  @spec stop_rtu_client(name :: client()) :: :ok | {:error, :not_started}
+  def stop_rtu_client(name) do
+    supervisor = Modbuzz.Application.client_dynamic_supervisor_name()
+
+    stop_child(supervisor, name)
   end
 
   @doc """
@@ -215,10 +256,11 @@ defmodule Modbuzz do
           name :: server(),
           device_name :: String.t(),
           transport_opts :: Circuits.UART.uart_option(),
-          data_source :: data_server() | client()
+          data_source :: data_server() | client(),
+          transport :: module()
         ) :: :ok | {:error, :already_started}
-  def start_rtu_server(name, device_name, transport_opts, data_source) do
-    supervisor = Modbuzz.Application.server_supervisor_name()
+  def start_rtu_server(name, device_name, transport_opts, data_source, transport \\ Circuits.UART) do
+    supervisor = Modbuzz.Application.server_dynamic_supervisor_name()
 
     child_spec =
       {Modbuzz.RTU.Server,
@@ -226,10 +268,21 @@ defmodule Modbuzz do
          name: name,
          device_name: device_name,
          transport_opts: transport_opts,
-         data_source: data_source
+         data_source: data_source,
+         transport: transport
        ]}
 
     start_child(supervisor, child_spec)
+  end
+
+  @doc """
+  Stop RTU server.
+  """
+  @spec stop_rtu_server(name :: server()) :: :ok | {:error, :not_started}
+  def stop_rtu_server(name) do
+    supervisor = Modbuzz.Application.server_dynamic_supervisor_name()
+
+    stop_child(supervisor, name)
   end
 
   defp start_child(supervisor, child_spec) do
@@ -242,6 +295,19 @@ defmodule Modbuzz do
 
       {:error, {:already_started, _pid}} ->
         {:error, :already_started}
+    end
+  end
+
+  defp stop_child(supervisor, name) do
+    case GenServer.whereis(name) do
+      pid when is_pid(pid) ->
+        case DynamicSupervisor.terminate_child(supervisor, pid) do
+          :ok -> :ok
+          {:error, :not_found} -> {:error, :not_started}
+        end
+
+      nil ->
+        {:error, :not_started}
     end
   end
 

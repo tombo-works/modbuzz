@@ -39,6 +39,7 @@ defmodule Modbuzz.Data.Server do
 
   def init(args) do
     name = Keyword.fetch!(args, :name)
+    _args = Keyword.fetch!(args, :args)
 
     {:ok, %{name: name, reqs: %{}}}
   end

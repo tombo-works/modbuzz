@@ -90,8 +90,8 @@ defmodule Modbuzz do
   @spec start_data_server(name :: data_server()) :: :ok
   def start_data_server(name) do
     supervisor = Modbuzz.Application.data_server_dynamic_supervisor_name()
-    name = Modbuzz.Data.ServerSupervisor.name(name)
-    child_spec = {Modbuzz.Data.ServerSupervisor, name: name}
+    via_name = Modbuzz.Data.ServerSupervisor.name(name)
+    child_spec = {Modbuzz.Data.ServerSupervisor, via_name: via_name}
 
     start_child(supervisor, child_spec)
   end
@@ -102,9 +102,9 @@ defmodule Modbuzz do
   @spec stop_data_server(name :: server()) :: :ok | {:error, :not_started}
   def stop_data_server(name) do
     supervisor = Modbuzz.Application.data_server_dynamic_supervisor_name()
-    name = Modbuzz.Data.ServerSupervisor.name(name)
+    via_name = Modbuzz.Data.ServerSupervisor.name(name)
 
-    stop_child(supervisor, name)
+    stop_child(supervisor, via_name)
   end
 
   @doc """
@@ -167,12 +167,12 @@ defmodule Modbuzz do
         ) :: :ok | {:error, :already_started}
   def start_tcp_server(name, address, port, data_source) do
     supervisor = Modbuzz.Application.server_dynamic_supervisor_name()
-    name = Modbuzz.TCP.ServerSupervisor.name(name)
+    via_name = Modbuzz.TCP.ServerSupervisor.name(name)
 
     child_spec =
       {Modbuzz.TCP.ServerSupervisor,
        [
-         name: name,
+         via_name: via_name,
          address: address,
          port: port,
          data_source: data_source
@@ -187,9 +187,9 @@ defmodule Modbuzz do
   @spec stop_tcp_server(name :: server()) :: :ok | {:error, :not_started}
   def stop_tcp_server(name) do
     supervisor = Modbuzz.Application.server_dynamic_supervisor_name()
-    name = Modbuzz.TCP.ServerSupervisor.name(name)
+    via_name = Modbuzz.TCP.ServerSupervisor.name(name)
 
-    stop_child(supervisor, name)
+    stop_child(supervisor, via_name)
   end
 
   @doc """

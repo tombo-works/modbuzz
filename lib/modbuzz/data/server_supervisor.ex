@@ -9,15 +9,14 @@ defmodule Modbuzz.Data.ServerSupervisor do
 
   @doc false
   def start_link(args) do
-    name = Keyword.fetch!(args, :name)
-    Supervisor.start_link(__MODULE__, args, name: name)
+    via_name = Keyword.fetch!(args, :via_name)
+    Supervisor.start_link(__MODULE__, args, name: via_name)
   end
 
   @doc false
   def init(args) do
-    {name, args} = Keyword.pop!(args, :name)
-
-    {:via, Registry, {Modbuzz.Registry, {name, __MODULE__}}} = name
+    {via_name, args} = Keyword.pop!(args, :via_name)
+    {:via, Registry, {Modbuzz.Registry, {name, __MODULE__}}} = via_name
 
     children = [
       {

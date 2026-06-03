@@ -87,7 +87,7 @@ defmodule Modbuzz do
       iex> :ok = Modbuzz.upsert(:data_server, 1, req, res)
       iex> {:ok, ^res} = Modbuzz.request(:data_server, 1, req)
   """
-  @spec start_data_server(name :: data_server()) :: :ok
+  @spec start_data_server(name :: data_server()) :: :ok | {:error, :already_started}
   def start_data_server(name) do
     supervisor = Modbuzz.Application.data_server_dynamic_supervisor_name()
     via_name = Modbuzz.Data.ServerSupervisor.name(name)
@@ -99,7 +99,7 @@ defmodule Modbuzz do
   @doc """
   Stop Data server.
   """
-  @spec stop_data_server(name :: server()) :: :ok | {:error, :not_started}
+  @spec stop_data_server(name :: data_server()) :: :ok | {:error, :not_started}
   def stop_data_server(name) do
     supervisor = Modbuzz.Application.data_server_dynamic_supervisor_name()
     via_name = Modbuzz.Data.ServerSupervisor.name(name)

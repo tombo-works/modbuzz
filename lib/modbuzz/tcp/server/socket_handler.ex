@@ -27,51 +27,89 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
        data_source: data_source,
        timeout: timeout,
        binary: <<>>
-     }, {:continue, :recv}}
+     }}
   end
 
-  def handle_continue(:recv, state) do
+  def handle_info({:tcp, socket, recv_binary}, %{socket: socket} = state) do
     %{
-      transport: transport,
-      socket: socket,
-      data_source: data_source,
-      timeout: timeout
+      transport: transport
     } = state
 
-    case transport.recv(socket, _length = 0, timeout) do
-      {:ok, binary} ->
-        binary = state.binary <> binary
+    binary = state.binary <> recv_binary
 
-        case ADU.decode_request(binary, []) do
-          {:ok, {adu_tuples, rest_binary}} ->
-            response_binary =
-              Enum.reduce(adu_tuples, <<>>, fn {:ok, adu}, acc ->
-                response_pdu_or_nil = request(data_source, adu.unit_id, adu.pdu, timeout)
-                acc <> to_adu_binary(response_pdu_or_nil, adu.transaction_id, adu.unit_id)
-              end)
+    case ADU.decode_request(binary, []) do
+      {:ok, {adu_tuples, rest_binary}} ->
+        response_binary =
+          Enum.reduce(adu_tuples, <<>>, fn {:ok, adu}, acc ->
+            response_pdu_or_nil = request(adu, state)
+            acc <> to_adu_binary(response_pdu_or_nil, adu.transaction_id, adu.unit_id)
+          end)
 
-            if response_binary != <<>>, do: transport.send(socket, response_binary)
+        if response_binary != <<>>, do: transport.send(socket, response_binary)
 
-            {:noreply, %{state | binary: rest_binary}, {:continue, :recv}}
+        case set_active_once(transport, socket) do
+          :ok ->
+            {:noreply, %{state | binary: rest_binary}}
 
           {:error, reason} ->
-            Log.error("decode error", reason, state)
+            Log.error("setopts error", reason, state)
             :ok = transport.close(socket)
             {:stop, reason, state}
         end
 
       {:error, reason} ->
-        Log.error("#{inspect(transport)} recv error", reason, state)
+        Log.error("decode error", reason, state)
         :ok = transport.close(socket)
         {:stop, reason, state}
     end
   end
 
-  defp request(data_source, unit_id, request, timeout) do
-    case GenServer.call(data_source, {:call, unit_id, request, timeout}, timeout + 50) do
-      {:ok, pdu} when is_struct(pdu) -> pdu
-      {:error, pdu} when is_struct(pdu) -> pdu
-      {:error, _reason} -> nil
+  def handle_info({:tcp, _socket, _binary}, state) do
+    Log.warning("tcp message from stale socket ignored", nil, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:tcp_closed, socket}, %{socket: socket} = state) do
+    %{transport: transport} = state
+
+    :ok = transport.close(socket)
+    {:stop, :normal, state}
+  end
+
+  def handle_info({:tcp_closed, _socket}, state) do
+    Log.warning("tcp_closed message from stale socket ignored", nil, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:tcp_error, socket, reason}, %{socket: socket} = state) do
+    %{transport: transport} = state
+
+    Log.error("tcp error", reason, state)
+    :ok = transport.close(socket)
+    {:stop, reason, state}
+  end
+
+  def handle_info({:tcp_error, _socket, _reason}, state) do
+    Log.warning("tcp_error message from stale socket ignored", nil, state)
+    {:noreply, state}
+  end
+
+  defp request(adu, state) do
+    %{
+      data_source: data_source,
+      timeout: timeout
+    } = state
+
+    case GenServer.call(data_source, {:call, adu.unit_id, adu.pdu, timeout}, timeout + 50) do
+      {:ok, pdu} when is_struct(pdu) ->
+        pdu
+
+      {:error, pdu} when is_struct(pdu) ->
+        pdu
+
+      {:error, reason} ->
+        Log.error("request to data source failed", reason, state)
+        nil
     end
   end
 
@@ -84,4 +122,7 @@ defmodule Modbuzz.TCP.Server.SocketHandler do
         <<>>
     end
   end
+
+  defp set_active_once(:gen_tcp, socket), do: :inet.setopts(socket, active: :once)
+  defp set_active_once(transport, socket), do: transport.setopts(socket, active: :once)
 end

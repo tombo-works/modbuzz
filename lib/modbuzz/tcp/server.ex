@@ -4,6 +4,7 @@ defmodule Modbuzz.TCP.Server do
   use GenServer
 
   alias Modbuzz.TCP.Log
+  alias Modbuzz.TCP.Server.SocketHandlerSupervisor
 
   @doc false
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -57,14 +58,33 @@ defmodule Modbuzz.TCP.Server do
 
     case transport.accept(listen_socket) do
       {:ok, socket} ->
-        Modbuzz.TCP.Server.SocketHandlerSupervisor.start_socket_handler(
-          name,
-          transport,
-          address,
-          port,
-          data_source,
-          socket
-        )
+        case SocketHandlerSupervisor.start_socket_handler(
+               name,
+               transport,
+               address,
+               port,
+               data_source,
+               socket
+             ) do
+          {:ok, pid} ->
+            with :ok <- transport.controlling_process(socket, pid),
+                 :ok <- set_active_once(transport, socket) do
+              :ok
+            else
+              {:error, reason} ->
+                Log.error(":accept child setup failed", reason, state)
+                :ok = transport.close(socket)
+                :ok = SocketHandlerSupervisor.stop_socket_handler(name, pid)
+            end
+
+          :ignore ->
+            Log.warning(":accept child start ignored", nil, state)
+            :ok = transport.close(socket)
+
+          {:error, reason} ->
+            Log.error(":accept child start failed", reason, state)
+            :ok = transport.close(socket)
+        end
 
       {:error, reason} ->
         Log.error(":accept failed", reason, state)
@@ -89,4 +109,7 @@ defmodule Modbuzz.TCP.Server do
       reuseaddr: true
     )
   end
+
+  defp set_active_once(:gen_tcp, socket), do: :inet.setopts(socket, active: :once)
+  defp set_active_once(transport, socket), do: transport.setopts(socket, active: :once)
 end

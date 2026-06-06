@@ -6,7 +6,7 @@ defmodule Modbuzz.TCP.Server.SocketHandlerTest do
   setup :verify_on_exit!
   setup :set_mox_global
 
-  test "does not send when recv has only a partial ADU binary" do
+  test "does not send when socket receives only a partial ADU binary" do
     socket = make_ref()
     me = self()
 
@@ -22,27 +22,29 @@ defmodule Modbuzz.TCP.Server.SocketHandlerTest do
     <<partial_adu_binary::binary-size(partial_size), _last_byte>> = encoded_adu_binary
 
     Modbuzz.TCP.TransportMock
-    |> expect(:recv, fn ^socket, _length = 0, _timeout ->
-      {:ok, partial_adu_binary}
-    end)
-    |> expect(:recv, fn ^socket, _length = 0, _timeout -> {:error, :closed} end)
+    |> expect(:setopts, fn ^socket, active: :once -> :ok end)
+    |> expect(:send, 0, fn _, _ -> :ok end)
     |> expect(:close, fn ^socket ->
       send(me, :closed)
       :ok
     end)
 
-    start_link_supervised!(
-      {Modbuzz.TCP.Server.SocketHandler,
-       [
-         transport: Modbuzz.TCP.TransportMock,
-         address: {127, 0, 0, 1},
-         port: 50_200,
-         socket: socket,
-         data_source: self(),
-         timeout: 10
-       ]},
-      restart: :temporary
-    )
+    pid =
+      start_link_supervised!(
+        {Modbuzz.TCP.Server.SocketHandler,
+         [
+           transport: Modbuzz.TCP.TransportMock,
+           address: {127, 0, 0, 1},
+           port: 50_200,
+           socket: socket,
+           data_source: self(),
+           timeout: 10
+         ]},
+        restart: :temporary
+      )
+
+    send(pid, {:tcp, socket, partial_adu_binary})
+    send(pid, {:tcp_closed, socket})
 
     assert_receive(:closed)
   end

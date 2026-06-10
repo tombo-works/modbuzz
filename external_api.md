@@ -7,7 +7,7 @@ If you are new to this library, read in this order:
 1. README Quick Start
 2. Request APIs (`request`, `request_async`)
 3. Lifecycle APIs (`start_*`, `stop_*`)
-4. Optional data server APIs (`create_unit`, `upsert`, `delete`, `dump`)
+4. Data server APIs (`create_unit`, `upsert`, `delete`, `dump`)
 
 ## Request APIs
 
@@ -66,7 +66,7 @@ Common return values:
 
 ## Data server APIs
 
-Use these when you want a local test double without hardware.
+Use these when you want an in-memory value source behind TCP/RTU servers.
 
 - `Modbuzz.create_unit/2`
 - `Modbuzz.upsert/4`
@@ -88,14 +88,13 @@ Hardware-first flow:
 :ok = Modbuzz.stop_tcp_client(:client)
 ```
 
-Optional local test-double flow:
+Data-server-backed server flow:
 
 ```elixir
 :ok = Modbuzz.start_data_server(:data)
 :ok = Modbuzz.create_unit(:data, 1)
 :ok = Modbuzz.upsert(:data, 1, request, response)
-{:ok, ^response} = Modbuzz.request(:data, 1, request)
-:ok = Modbuzz.stop_data_server(:data)
+:ok = Modbuzz.start_tcp_server(:server, {192, 168, 1, 10}, 502, :data)
 ```
 
 ## Choosing a data source for servers

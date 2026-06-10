@@ -59,10 +59,6 @@ defmodule Modbuzz.Data.Server do
         :ok = Modbuzz.Data.Unit.upsert(pid, request, res_or_cb)
         {:reply, :ok, state}
 
-      {atom, node} ->
-        :ok = Modbuzz.Data.Unit.upsert({atom, node}, request, res_or_cb)
-        {:reply, :ok, state}
-
       nil ->
         {:reply, {:error, :unit_not_found}, state}
     end
@@ -76,10 +72,6 @@ defmodule Modbuzz.Data.Server do
         :ok = Modbuzz.Data.Unit.delete(pid, request)
         {:reply, :ok, state}
 
-      {atom, node} ->
-        :ok = Modbuzz.Data.Unit.delete({atom, node}, request)
-        {:reply, :ok, state}
-
       nil ->
         {:reply, {:error, :unit_not_found}, state}
     end
@@ -91,10 +83,6 @@ defmodule Modbuzz.Data.Server do
     case GenServer.whereis(unit_name) do
       pid when is_pid(pid) ->
         data = Modbuzz.Data.Unit.dump(pid)
-        {:reply, {:ok, data}, state}
-
-      {atom, node} ->
-        data = Modbuzz.Data.Unit.dump({atom, node})
         {:reply, {:ok, data}, state}
 
       nil ->
@@ -193,7 +181,6 @@ defmodule Modbuzz.Data.Server do
 
     case GenServer.whereis(unit_name) do
       pid when is_pid(pid) -> Modbuzz.Data.Unit.get(pid, request)
-      {atom, node} -> Modbuzz.Data.Unit.get({atom, node}, request)
       nil -> nil
     end
   end

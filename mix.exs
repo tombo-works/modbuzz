@@ -98,7 +98,7 @@ defmodule Modbuzz.MixProject do
       source_url: @source_url,
       docs: [
         main: "readme",
-        extras: ["README.md"],
+        extras: ["README.md", "external_api.md"],
         nest_modules_by_prefix:
           for {_modbus_function_code, modbus_function} <- pdu_seed() do
             Module.concat([Modbuzz.PDU, modbus_function])

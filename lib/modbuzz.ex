@@ -1,6 +1,12 @@
 defmodule Modbuzz do
   @moduledoc """
-  `Modbuzz` is yet another MODBUS library, supporting both TCP and RTU.
+  `Modbuzz` is a MODBUS library with a small public API for TCP, RTU, and gateway use cases.
+
+  The `Modbuzz` module is the external API entrypoint:
+
+  - Request data (`request/2`, `request/3`, `request/4`, `request_async/2`, `request_async/3`, `request_async/4`, `request_async/5`)
+  - Manage optional data-server content (`create_unit/1`, `create_unit/2`, `upsert/3`, `upsert/4`, `delete/2`, `delete/3`, `dump/1`, `dump/2`)
+  - Start and stop TCP/RTU clients and servers
   """
 
   @type request :: Modbuzz.PDU.Protocol.t()
@@ -13,7 +19,20 @@ defmodule Modbuzz do
   @type unit_id :: 0..247
 
   @doc """
-  Request data synchronously.
+  Send a synchronous request and wait for the result.
+
+  Use this function when your flow is simple and blocking behavior is acceptable.
+
+  ## Returns
+
+  - `{:ok, response}` on normal response.
+  - `{:error, error_response}` on MODBUS exception response.
+  - `{:error, reason}` on local/network/runtime failures.
+
+  ## Common failures
+
+  - `{:error, :timeout}` when no response arrives before `timeout`.
+  - Caller exits with `:noproc` if target process is not running (`GenServer.call/3` behavior).
   """
   @spec request(
           name :: client() | data_server(),
@@ -29,16 +48,23 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Request data asynchronously.
+  Send an asynchronous request and return immediately.
 
-  This function returns immediately and attempts to send the result as a message to `pid`.
-  It uses `GenServer.cast/2`, so it always returns `:ok` even if `name` is not running or
-  registered. In that case, no result message will be delivered.
+  Use this function when you need non-blocking behavior.
+  The result is sent to `pid` as a message.
 
-  The message format is:
+  This function uses `GenServer.cast/2`, so it always returns `:ok` even if `name` is not
+  running or registered. In that case, no result message is delivered.
+
+  ## Result message format
 
       {:modbuzz, name, unit_id, request, {:ok, response}}
       {:modbuzz, name, unit_id, request, {:error, error_response_or_error_reason}}
+
+  ## Common failures
+
+  - No message received because target process is not started.
+  - `{:error, :timeout}` in async message payload when response is late.
   """
   @spec request_async(
           name :: client() | data_server(),
@@ -52,30 +78,63 @@ defmodule Modbuzz do
     GenServer.cast(name, {:cast, unit_id, request, pid, timeout})
   end
 
-  @doc "Create a unit under the data server."
+  @doc """
+  Create a unit under a data server.
+
+  ## Returns
+
+  - `:ok` when unit is created.
+  - `{:error, :already_created}` when the unit already exists.
+  """
   @spec create_unit(name :: data_server(), unit_id()) :: :ok | {:error, :already_created}
   defdelegate create_unit(name, unit_id \\ 0), to: Modbuzz.Data.Server
 
   @doc """
-  Upsert request response/callback pair to data server.
+  Upsert a request response/callback pair into a data server unit.
 
-  When using a callback, the user is responsible for the callback.
-  This library does not handle its error. In case of an error, the request will simply time out with noreply.
+  Use this to define how data server responds for a specific request.
+
+  When using a callback, callback error handling is your responsibility.
+  If callback fails and does not return a response, caller may observe timeout.
+
+  ## Returns
+
+  - `:ok` when upsert succeeds.
+  - `{:error, :unit_not_found}` when target unit does not exist.
   """
   @spec upsert(name :: data_server(), unit_id(), request(), response() | callback()) ::
           :ok | {:error, :unit_not_found}
   defdelegate upsert(name, unit_id \\ 0, request, res_or_cb), to: Modbuzz.Data.Server
 
-  @doc "Delete request response pair from data server."
+  @doc """
+  Delete a request mapping from a data server unit.
+
+  ## Returns
+
+  - `:ok` when mapping is deleted.
+  - `{:error, :unit_not_found}` when target unit does not exist.
+  """
   @spec delete(name :: data_server(), unit_id(), request()) :: :ok | {:error, :unit_not_found}
   defdelegate delete(name, unit_id \\ 0, request), to: Modbuzz.Data.Server
 
-  @doc "Dump data from data server."
+  @doc """
+  Dump all request mappings from a data server unit.
+
+  ## Returns
+
+  - `{:ok, map}` when unit exists.
+  - `{:error, :unit_not_found}` when target unit does not exist.
+  """
   @spec dump(name :: data_server(), unit_id()) :: {:ok, map()} | {:error, :unit_not_found}
   defdelegate dump(name, unit_id \\ 0), to: Modbuzz.Data.Server
 
   @doc """
-  Start data server.
+  Start a data server instance.
+
+  ## Returns
+
+  - `:ok` when started.
+  - `{:error, :already_started}` when name is already in use.
 
   ## Examples
 
@@ -97,7 +156,12 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Stop Data server.
+  Stop a data server instance.
+
+  ## Returns
+
+  - `:ok` when stopped.
+  - `{:error, :not_started}` when target is not running.
   """
   @spec stop_data_server(name :: data_server()) :: :ok | {:error, :not_started}
   def stop_data_server(name) do
@@ -108,7 +172,12 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Start TCP client.
+  Start a TCP client instance.
+
+  ## Returns
+
+  - `:ok` when started.
+  - `{:error, :already_started}` when name is already in use.
 
   ## Examples
 
@@ -137,7 +206,12 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Stop TCP client.
+  Stop a TCP client instance.
+
+  ## Returns
+
+  - `:ok` when stopped.
+  - `{:error, :not_started}` when target is not running.
   """
   @spec stop_tcp_client(name :: client()) :: :ok | {:error, :not_started}
   def stop_tcp_client(name) do
@@ -147,7 +221,14 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Start TCP server.
+  Start a TCP server instance.
+
+  `data_source` can be a data server, TCP client, or RTU client process name.
+
+  ## Returns
+
+  - `:ok` when started.
+  - `{:error, :already_started}` when name is already in use.
 
   ## Examples
 
@@ -182,7 +263,12 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Stop TCP server.
+  Stop a TCP server instance.
+
+  ## Returns
+
+  - `:ok` when stopped.
+  - `{:error, :not_started}` when target is not running.
   """
   @spec stop_tcp_server(name :: server()) :: :ok | {:error, :not_started}
   def stop_tcp_server(name) do
@@ -193,10 +279,15 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Start RTU client.
+  Start an RTU client instance.
 
   This function accepts `transport_opts` as its third argument which allows to pass options to `Circuits.UART`.
   Options provided in `transport_opts` are passed directly to `Circuits.UART` without modification.
+
+  ## Returns
+
+  - `:ok` when started.
+  - `{:error, :already_started}` when name is already in use.
 
   ## Examples
 
@@ -227,7 +318,12 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Stop RTU client.
+  Stop an RTU client instance.
+
+  ## Returns
+
+  - `:ok` when stopped.
+  - `{:error, :not_started}` when target is not running.
   """
   @spec stop_rtu_client(name :: client()) :: :ok | {:error, :not_started}
   def stop_rtu_client(name) do
@@ -237,10 +333,17 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Start RTU server.
+  Start an RTU server instance.
 
   This function accepts `transport_opts` as its third argument which allows to pass options to `Circuits.UART`.
   Options provided in `transport_opts` are passed directly to `Circuits.UART` without modification.
+
+  `data_source` can be a data server, TCP client, or RTU client process name.
+
+  ## Returns
+
+  - `:ok` when started.
+  - `{:error, :already_started}` when name is already in use.
 
   ## Examples
 
@@ -276,7 +379,12 @@ defmodule Modbuzz do
   end
 
   @doc """
-  Stop RTU server.
+  Stop an RTU server instance.
+
+  ## Returns
+
+  - `:ok` when stopped.
+  - `{:error, :not_started}` when target is not running.
   """
   @spec stop_rtu_server(name :: server()) :: :ok | {:error, :not_started}
   def stop_rtu_server(name) do

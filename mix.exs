@@ -7,7 +7,7 @@ defmodule Modbuzz.MixProject do
     [
       app: :modbuzz,
       version: "0.2.0",
-      elixir: "~> 1.18",
+      elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       consolidate_protocols: Mix.env() != :test,

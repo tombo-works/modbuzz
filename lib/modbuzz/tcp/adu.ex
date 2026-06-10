@@ -64,7 +64,7 @@ defmodule Modbuzz.TCP.ADU do
     if byte_size(binary) < adu_frame_size do
       {:ok, {Enum.reverse(acc), binary}}
     else
-      <<adu_binary::binary-size(adu_frame_size), rest::binary>> = binary
+      <<adu_binary::binary-size(^adu_frame_size), rest::binary>> = binary
 
       case decode_request(adu_binary) do
         {:error, _reason} = error ->
@@ -115,7 +115,7 @@ defmodule Modbuzz.TCP.ADU do
     if byte_size(binary) < adu_frame_size do
       {:ok, {Enum.reverse(acc), binary}}
     else
-      <<adu_binary::binary-size(adu_frame_size), rest::binary>> = binary
+      <<adu_binary::binary-size(^adu_frame_size), rest::binary>> = binary
 
       case decode_response(adu_binary) do
         {:error, %__MODULE__{}} = adu_tuple ->

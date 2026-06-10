@@ -19,7 +19,7 @@ defmodule Modbuzz.TCP.Server.SocketHandlerTest do
 
     partial_size = byte_size(encoded_adu_binary) - 1
     # Drop the last byte on purpose so the socket handler receives an incomplete ADU binary.
-    <<partial_adu_binary::binary-size(partial_size), _last_byte>> = encoded_adu_binary
+    <<partial_adu_binary::binary-size(^partial_size), _last_byte>> = encoded_adu_binary
 
     Modbuzz.TCP.TransportMock
     |> expect(:setopts, fn ^socket, active: :once -> :ok end)

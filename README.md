@@ -5,6 +5,10 @@
 [![license](https://img.shields.io/hexpm/l/modbuzz.svg)](https://github.com/tombo-works/modbuzz/blob/main/REUSE.toml)
 [![REUSE](https://api.reuse.software/badge/github.com/tombo-works/modbuzz)](https://api.reuse.software/info/github.com/tombo-works/modbuzz)
 
+<p align="center">
+  <img src="assets/modbuzz.png" alt="Modbuzz icon" width="220" />
+</p>
+
 Yet another MODBUS library, supporting both TCP and RTU, providing gateway functionality.
 
 ## Index

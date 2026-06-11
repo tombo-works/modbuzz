@@ -3,6 +3,7 @@ version = 1
 [[annotations]]
 path = [
   "README.md",
+  "assets/**",
   "external_api.md",
   "lib/**",
   "mix.exs",

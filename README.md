@@ -40,11 +40,11 @@ Yet another MODBUS library, supporting both TCP and RTU, providing gateway funct
 
 Modbuzz provides one consistent public API for:
 
-- Connecting to real MODBUS devices over TCP or RTU.
-- Running TCP/RTU clients and servers.
-- Building TCP/RTU gateways by connecting a server to another data source.
+- Acting as a MODBUS client to read and write data from/to MODBUS devices over TCP or RTU.
+- Acting as a MODBUS server to provide data and receive commands over TCP or RTU.
+- Building MODBUS gateways that connect any combination of TCP and RTU transports.
 
-If you are evaluating this library, start from Quick Start and verify one request end-to-end first.
+If you are evaluating this library, start from Quick Start to see a basic client request, then explore Server setup and Gateway recipes based on your use case.
 
 ### Quick Start (3 minutes)
 
@@ -66,34 +66,66 @@ req = %WriteSingleCoil.Req{output_address: 0, output_value: true}
 :ok = Modbuzz.stop_tcp_client(:demo_tcp_client)
 ```
 
-You can also use a data server as an in-memory value source behind TCP/RTU servers.
-
 ### Client usage (primary use case)
 
 #### TCP client
 
 `Modbuzz.start_tcp_client/3` starts a TCP client instance.
 
-`Modbuzz.request/2` or `Modbuzz.request/3` requests synchronously. The 2nd argument, `unit_id`, can be omitted. If omitted, its value defaults to 0.
+`Modbuzz.request/2` or `Modbuzz.request/3` requests synchronously.
+`Modbuzz.request_async/2` or `Modbuzz.request_async/3` requests asynchronously.
+The 2nd argument, `unit_id`, can be omitted. If omitted, its value defaults to 0.
+
+Common setup:
 
 ```elixir
-:ok = Modbuzz.start_tcp_client(:your_tcp_client, {192, 168, 0, 10}, 502)
-alias Modbuzz.PDU.WriteSingleCoil
-req = %WriteSingleCoil.Req{output_address: 0, output_value: true}
-{:ok, _res} = Modbuzz.request(:your_tcp_client, req)
+iex> :ok = Modbuzz.start_tcp_client(:your_tcp_client, {192, 168, 0, 10}, 502)
+iex> alias Modbuzz.PDU.WriteSingleCoil
+iex> req = %WriteSingleCoil.Req{output_address: 0, output_value: true}
+```
+
+Synchronous request:
+
+```elixir
+iex> {:ok, _res} = Modbuzz.request(:your_tcp_client, req)
+```
+
+Asynchronous request:
+
+```elixir
+iex> :ok = Modbuzz.request_async(:your_tcp_client, req)
+iex> flush()
+{:modbuzz, :your_tcp_client, 0, _request, {:ok, _response}}
 ```
 
 #### RTU client
 
 `Modbuzz.start_rtu_client/3` starts an RTU client instance.
 
-`Modbuzz.request/2` or `Modbuzz.request/3` requests synchronously. The 2nd argument, `unit_id`, can be omitted. If omitted, its value defaults to 0.
+`Modbuzz.request/2` or `Modbuzz.request/3` requests synchronously.
+`Modbuzz.request_async/2` or `Modbuzz.request_async/3` requests asynchronously.
+The 2nd argument, `unit_id`, can be omitted. If omitted, its value defaults to 0.
+
+Common setup:
 
 ```elixir
-:ok = Modbuzz.start_rtu_client(:your_rtu_client, "ttyUSB0", [speed: 9600])
-alias Modbuzz.PDU.WriteSingleCoil
-req = %WriteSingleCoil.Req{output_address: 0, output_value: true}
-{:ok, _res} = Modbuzz.request(:your_rtu_client, 1, req)
+iex> :ok = Modbuzz.start_rtu_client(:your_rtu_client, "ttyUSB0", [speed: 9600])
+iex> alias Modbuzz.PDU.WriteSingleCoil
+iex> req = %WriteSingleCoil.Req{output_address: 0, output_value: true}
+```
+
+Synchronous request:
+
+```elixir
+iex> {:ok, _res} = Modbuzz.request(:your_rtu_client, 1, req)
+```
+
+Asynchronous request:
+
+```elixir
+iex> :ok = Modbuzz.request_async(:your_rtu_client, 1, req)
+iex> flush()
+{:modbuzz, :your_rtu_client, 1, _request, {:ok, _response}}
 ```
 
 #### Data server as value source
@@ -102,13 +134,13 @@ req = %WriteSingleCoil.Req{output_address: 0, output_value: true}
 Data server lets you expose your own application data (for example, sensor values) as Modbus values through TCP/RTU servers.
 
 ```elixir
-:ok = Modbuzz.start_data_server(:your_data_server)
-alias Modbuzz.PDU.WriteSingleCoil
-req = %WriteSingleCoil.Req{output_address: 0, output_value: true}
-res = %WriteSingleCoil.Res{output_address: 0, output_value: true}
-:ok = Modbuzz.create_unit(:your_data_server, 1)
-:ok = Modbuzz.upsert(:your_data_server, 1, req, res)
-:ok = Modbuzz.start_tcp_server(:your_tcp_server, {192, 168, 1, 10}, 502, :your_data_server)
+iex> :ok = Modbuzz.start_data_server(:your_data_server)
+iex> alias Modbuzz.PDU.WriteSingleCoil
+iex> req = %WriteSingleCoil.Req{output_address: 0, output_value: true}
+iex> res = %WriteSingleCoil.Res{output_address: 0, output_value: true}
+iex> :ok = Modbuzz.create_unit(:your_data_server, 1)
+iex> :ok = Modbuzz.upsert(:your_data_server, 1, req, res)
+iex> :ok = Modbuzz.start_tcp_server(:your_tcp_server, {192, 168, 1, 10}, 502, :your_data_server)
 ```
 
 In this setup, external Modbus clients can read/write values through your TCP/RTU server, backed by the data server mappings.

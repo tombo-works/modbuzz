@@ -265,7 +265,7 @@ by adding `modbuzz` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:modbuzz, "~> 0.2.0"}
+    {:modbuzz, "~> 0.3.0"}
   ]
 end
 ```
